@@ -12,6 +12,160 @@ body {
   margin: 0;
 }
 
+.access-page {
+  min-height: 100vh;
+  display: grid;
+  place-items: center;
+  padding: 28px;
+  background:
+    radial-gradient(circle at 15% 15%, rgba(23, 105, 194, 0.14), transparent 34%),
+    radial-gradient(circle at 85% 85%, rgba(8, 116, 67, 0.12), transparent 32%),
+    #f4f7fb;
+}
+
+.access-card {
+  width: min(680px, 100%);
+  background: #ffffff;
+  border: 1px solid #dce5ef;
+  border-radius: 18px;
+  padding: clamp(24px, 5vw, 44px);
+  box-shadow: 0 24px 70px rgba(28, 52, 84, 0.14);
+}
+
+.access-brand {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+
+.access-brand > span {
+  width: 62px;
+  height: 62px;
+  display: grid;
+  place-items: center;
+  flex: 0 0 auto;
+  border-radius: 16px;
+  color: #ffffff;
+  background: linear-gradient(145deg, #1769c2, #0c4e99);
+  box-shadow: 0 10px 24px rgba(23, 105, 194, 0.24);
+}
+
+.access-brand p,
+.access-brand h1 {
+  margin: 0;
+}
+
+.access-brand p {
+  color: #1769c2;
+  font-weight: 750;
+  margin-bottom: 3px;
+}
+
+.access-brand h1 {
+  font-size: clamp(1.5rem, 4vw, 2.15rem);
+  line-height: 1.18;
+}
+
+.access-intro {
+  color: #526173;
+  line-height: 1.65;
+  margin: 24px 0;
+}
+
+.access-options {
+  display: grid;
+  gap: 12px;
+}
+
+button.access-option {
+  width: 100%;
+  min-height: 80px;
+  display: grid;
+  grid-template-columns: 48px minmax(0, 1fr) 24px;
+  gap: 14px;
+  padding: 14px 16px;
+  text-align: left;
+  border-radius: 12px;
+  background: #f9fbfd;
+}
+
+button.access-option:hover:not(:disabled) {
+  border-color: #8ba8ca;
+  background: #f4f8fd;
+  transform: translateY(-1px);
+}
+
+button.access-option:disabled {
+  cursor: wait;
+  opacity: 0.62;
+}
+
+.access-option > span:nth-child(2) {
+  display: grid;
+  gap: 4px;
+}
+
+.access-option strong,
+.access-option small {
+  display: block;
+}
+
+.access-option strong {
+  font-size: 1rem;
+}
+
+.access-option small {
+  color: #65758a;
+  font-size: 0.85rem;
+}
+
+.option-icon {
+  width: 44px;
+  height: 44px;
+  display: grid;
+  place-items: center;
+  border-radius: 10px;
+  color: #1769c2;
+  background: #eaf3ff;
+}
+
+.google-mark {
+  font-family: Arial, sans-serif;
+  font-size: 1.35rem;
+  font-weight: 800;
+  color: #4285f4;
+  background: #ffffff;
+  border: 1px solid #dce5ef;
+}
+
+.cloud-option {
+  border-color: #bdd5f1;
+}
+
+.access-message,
+.access-error,
+.access-footnote {
+  margin: 14px 0 0;
+  font-size: 0.88rem;
+}
+
+.access-message {
+  color: #1769c2;
+}
+
+.access-error {
+  color: #b42318;
+  padding: 10px 12px;
+  border-radius: 8px;
+  background: #fff1f0;
+  border: 1px solid #f4c7c3;
+}
+
+.access-footnote {
+  color: #65758a;
+  text-align: center;
+}
+
 button,
 input,
 select,
@@ -131,6 +285,51 @@ textarea {
 
 .topbar p {
   margin: 0;
+}
+
+.account-status {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 12px;
+  flex: 0 0 auto;
+}
+
+.account-status > div {
+  display: grid;
+  gap: 3px;
+  text-align: right;
+}
+
+.account-status strong,
+.account-status span {
+  display: block;
+}
+
+.account-status strong {
+  max-width: 240px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 0.9rem;
+}
+
+.account-status span {
+  color: #65758a;
+  font-size: 0.78rem;
+}
+
+.account-status i {
+  display: inline-block;
+  width: 7px;
+  height: 7px;
+  border-radius: 999px;
+  background: #18a566;
+  margin-right: 6px;
+}
+
+.account-status i.status-error {
+  background: #d92d20;
 }
 
 .primary {
@@ -843,6 +1042,14 @@ th {
     flex-direction: column;
   }
 
+  .account-status {
+    justify-content: space-between;
+  }
+
+  .account-status > div {
+    text-align: left;
+  }
+
   .summary-grid,
   .settings-grid,
   .collage-workspace,
@@ -856,5 +1063,33 @@ th {
 
   .form-grid {
     grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 520px) {
+  .access-page {
+    padding: 14px;
+  }
+
+  .access-card {
+    padding: 22px 18px;
+    border-radius: 14px;
+  }
+
+  .access-brand {
+    align-items: flex-start;
+  }
+
+  button.access-option {
+    grid-template-columns: 44px minmax(0, 1fr);
+  }
+
+  .access-option > svg:last-child {
+    display: none;
+  }
+
+  .account-status {
+    align-items: stretch;
+    flex-direction: column;
   }
 }

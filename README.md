@@ -1,6 +1,6 @@
 # School Programmes Ascention Manager
 
-A local React web app for managing student participation in school arts, sports, science, and other competition categories.
+A React web app for managing student participation in school arts, sports, science, and other competition categories.
 
 ## Run
 
@@ -9,7 +9,18 @@ npm install
 npm run dev
 ```
 
-The app stores data in the browser under `ascman-school-participation-db-v1` and ships with demo students, competition items, group members, participation records, and level results.
+At startup, the user chooses one of two workspaces:
+
+- **Continue with Google** authenticates with Firebase Authentication and stores that user's records in Firestore under `ascensionManagerUsers/{uid}`.
+- **Work locally offline** stores records in IndexedDB on the current browser and device. Existing `localStorage` data under `ascman-school-participation-db-v1` is migrated automatically the first time local mode is opened.
+
+Both modes ship with demo students, competition items, group members, participation records, and level results when a workspace is first created.
+
+## Firebase setup
+
+1. Enable Google in Firebase Console → Authentication → Sign-in method.
+2. Add every deployed or development hostname to Authentication → Settings → Authorized domains.
+3. Merge the `ascensionManagerUsers` rule block from `firestore.ascension-manager.rules` into the shared project's current Firestore rules. The Firebase project hosts multiple apps, so do not deploy that example file by itself and replace their rules.
 
 ## Data Schema
 

@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { createRoot } from 'react-dom/client';
 import {
   ArrowDown,
@@ -9,12 +9,15 @@ import {
   ChevronDown,
   ChevronRight,
   ClipboardList,
+  Cloud,
   Download,
   FileImage,
   FileText,
   GraduationCap,
   Grid2X2,
+  HardDrive,
   Layers,
+  LogOut,
   Mail,
   Pencil,
   Plus,
@@ -29,6 +32,9 @@ import {
 } from 'lucide-react';
 import html2canvas from 'html2canvas';
 import { jsPDF } from 'jspdf';
+import { onAuthStateChanged, signInWithPopup, signOut } from 'firebase/auth';
+import { auth, googleProvider } from './firebase';
+import { loadCloudData, loadLocalData, saveCloudData, saveLocalData } from './dataStore';
 import './styles.css';
 
 const APP_NAME = 'School Programmes Ascention Manager';
@@ -186,23 +192,16 @@ function normalizeDb(value) {
   };
 }
 
-function loadDb() {
-  const raw = localStorage.getItem(STORAGE_KEY);
-  if (!raw) {
-    const seeded = seedData();
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(seeded));
-    return seeded;
-  }
-  try {
-    const parsed = JSON.parse(raw);
-    return normalizeDb(parsed);
-  } catch {
-    return seedData();
-  }
-}
-
 function App() {
-  const [db, setDb] = useState(loadDb);
+  const [db, setDb] = useState(() => normalizeDb(null));
+  const dbRef = useRef(db);
+  const saveQueueRef = useRef(Promise.resolve());
+  const [mode, setMode] = useState(null);
+  const [currentUser, setCurrentUser] = useState(null);
+  const [authChecked, setAuthChecked] = useState(false);
+  const [accessBusy, setAccessBusy] = useState(false);
+  const [accessError, setAccessError] = useState('');
+  const [syncState, setSyncState] = useState('');
   const [page, setPage] = useState('Dashboard');
   const [modal, setModal] = useState(null);
   const [query, setQuery] = useState('');
@@ -230,10 +229,82 @@ function App() {
     }
   });
 
-  const save = (next) => {
-    setDb(next);
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(next));
+  useEffect(() => onAuthStateChanged(auth, (user) => {
+    setCurrentUser(user);
+    setAuthChecked(true);
+  }), []);
+
+  const enterOfflineMode = async () => {
+    setAccessBusy(true);
+    setAccessError('');
+    try {
+      const loaded = await loadLocalData({ legacyStorageKey: STORAGE_KEY, createDefault: seedData, normalize: normalizeDb });
+      dbRef.current = loaded;
+      setDb(loaded);
+      setMode('local');
+      setSyncState('Saved on this device');
+    } catch (error) {
+      setAccessError(`Local storage could not be opened. ${error.message || ''}`.trim());
+    } finally {
+      setAccessBusy(false);
+    }
   };
+
+  const enterCloudMode = async () => {
+    setAccessBusy(true);
+    setAccessError('');
+    try {
+      const user = currentUser || (await signInWithPopup(auth, googleProvider)).user;
+      const loaded = await loadCloudData(user.uid, seedData, normalizeDb);
+      dbRef.current = loaded;
+      setDb(loaded);
+      setCurrentUser(user);
+      setMode('cloud');
+      setSyncState('Synced with Firestore');
+    } catch (error) {
+      const message = error.code === 'auth/popup-closed-by-user'
+        ? 'Google sign-in was cancelled.'
+        : error.code === 'auth/operation-not-allowed'
+          ? 'Google sign-in is not enabled for this Firebase project.'
+          : error.message || 'Could not sign in with Google.';
+      setAccessError(message);
+    } finally {
+      setAccessBusy(false);
+    }
+  };
+
+  const leaveSession = async () => {
+    if (mode === 'cloud') await signOut(auth);
+    setMode(null);
+    setPage('Dashboard');
+    setModal(null);
+    setAccessError('');
+    setSyncState('');
+    const empty = normalizeDb(null);
+    dbRef.current = empty;
+    setDb(empty);
+  };
+
+  const save = useCallback((next) => {
+    const normalized = normalizeDb(next);
+    const previous = dbRef.current;
+    dbRef.current = normalized;
+    setDb(normalized);
+    setSyncState('Saving…');
+
+    saveQueueRef.current = saveQueueRef.current
+      .catch(() => undefined)
+      .then(() => {
+        if (mode === 'local') return saveLocalData(normalized);
+        if (mode === 'cloud' && currentUser) return saveCloudData(currentUser.uid, normalized, previous);
+        throw new Error('Choose a storage mode before saving.');
+      })
+      .then(() => setSyncState(mode === 'cloud' ? 'Synced with Firestore' : 'Saved on this device'))
+      .catch((error) => {
+        console.error(error);
+        setSyncState('Save failed — try again');
+      });
+  }, [mode, currentUser]);
 
   const notify = (message) => {
     setToast(message);
@@ -577,6 +648,19 @@ function App() {
     ['Settings', Settings]
   ];
 
+  if (!mode) {
+    return (
+      <AccessGate
+        authChecked={authChecked}
+        busy={accessBusy}
+        error={accessError}
+        user={currentUser}
+        enterCloudMode={enterCloudMode}
+        enterOfflineMode={enterOfflineMode}
+      />
+    );
+  }
+
   return (
     <div className="app-shell">
       <aside className="sidebar">
@@ -601,6 +685,15 @@ function App() {
           <div>
             <h1>{page === 'Collage Generator' ? 'Create Collage' : page}</h1>
             <p>Manage students, competition items, level results, and grace mark cases.</p>
+          </div>
+          <div className="account-status">
+            <div>
+              <strong>{mode === 'cloud' ? currentUser?.displayName || currentUser?.email : 'Offline workspace'}</strong>
+              <span><i className={syncState.includes('failed') ? 'status-error' : ''} />{syncState}</span>
+            </div>
+            <button onClick={leaveSession} title={mode === 'cloud' ? 'Sign out' : 'Change storage mode'}>
+              <LogOut size={17} /> {mode === 'cloud' ? 'Sign out' : 'Exit offline'}
+            </button>
           </div>
         </header>
 
@@ -713,6 +806,46 @@ function App() {
       )}
       {toast && <div className="toast">{toast}</div>}
     </div>
+  );
+}
+
+function AccessGate({ authChecked, busy, error, user, enterCloudMode, enterOfflineMode }) {
+  return (
+    <main className="access-page">
+      <section className="access-card">
+        <div className="access-brand">
+          <span><School size={34} /></span>
+          <div>
+            <p>Ascension Manager</p>
+            <h1>Choose where to keep your school data</h1>
+          </div>
+        </div>
+        <p className="access-intro">
+          Sign in to keep your workspace securely in Firestore across devices, or continue offline with data stored only in this browser.
+        </p>
+        <div className="access-options">
+          <button className="access-option cloud-option" onClick={enterCloudMode} disabled={busy || !authChecked}>
+            <span className="option-icon google-mark">G</span>
+            <span>
+              <strong>{user ? `Continue as ${user.displayName || user.email}` : 'Continue with Google'}</strong>
+              <small>Online workspace · synced with Firestore</small>
+            </span>
+            <Cloud size={22} />
+          </button>
+          <button className="access-option" onClick={enterOfflineMode} disabled={busy}>
+            <span className="option-icon"><HardDrive size={23} /></span>
+            <span>
+              <strong>Work locally offline</strong>
+              <small>Private to this device · stored in IndexedDB</small>
+            </span>
+            <HardDrive size={22} />
+          </button>
+        </div>
+        {busy && <p className="access-message">Opening your workspace…</p>}
+        {error && <p className="access-error" role="alert">{error}</p>}
+        <p className="access-footnote">You can export a universal backup from Settings in either mode.</p>
+      </section>
+    </main>
   );
 }
 
