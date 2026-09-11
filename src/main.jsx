@@ -35,7 +35,7 @@ import html2canvas from 'html2canvas';
 import { jsPDF } from 'jspdf';
 import { onAuthStateChanged, signInWithPopup, signOut } from 'firebase/auth';
 import { auth, googleProvider } from './firebase';
-import { getApprovedInvitation, NOT_AUTHORIZED_MESSAGE } from './authorization';
+import { APP_DISPLAY_NAME, checkCurrentUserAccess, requestCurrentUserAccess } from './authorization';
 import { loadCloudData, loadLocalData, saveCloudData, saveLocalData } from './dataStore';
 import './styles.css';
 
@@ -202,8 +202,12 @@ function App() {
   const [currentUser, setCurrentUser] = useState(null);
   const [currentRole, setCurrentRole] = useState(null);
   const [authChecked, setAuthChecked] = useState(false);
+  const [onlineAccess, setOnlineAccess] = useState('signed-out');
   const [accessBusy, setAccessBusy] = useState(false);
   const [accessError, setAccessError] = useState('');
+  const [requestBusy, setRequestBusy] = useState(false);
+  const [requestState, setRequestState] = useState('idle');
+  const [requestMessage, setRequestMessage] = useState('');
   const [syncState, setSyncState] = useState('');
   const [page, setPage] = useState('Dashboard');
   const [modal, setModal] = useState(null);
@@ -242,34 +246,40 @@ function App() {
       if (!user) {
         setCurrentUser(null);
         setCurrentRole(null);
+        setOnlineAccess('signed-out');
+        setRequestState('idle');
+        setRequestMessage('');
         setMode((currentMode) => currentMode === 'cloud' ? null : currentMode);
         setAuthChecked(true);
         return;
       }
 
+      setCurrentUser(user);
+      setCurrentRole(null);
+      setOnlineAccess('checking');
+      setAccessError('');
+      setRequestState('idle');
+      setRequestMessage('');
+
       try {
-        const invitation = await getApprovedInvitation(user);
+        const access = await checkCurrentUserAccess(user);
         if (!active) return;
 
-        if (!invitation) {
-          setCurrentUser(null);
-          setCurrentRole(null);
+        if (!access.allowed) {
+          setOnlineAccess('unauthorized');
           setMode((currentMode) => currentMode === 'cloud' ? null : currentMode);
-          setAccessError(NOT_AUTHORIZED_MESSAGE);
-          await signOut(auth).catch((error) => console.error('Could not sign out an unauthorized account.', error));
           return;
         }
 
-        setCurrentUser(user);
-        setCurrentRole(invitation.role);
+        setOnlineAccess('authorized');
+        setCurrentRole(access.role);
       } catch (error) {
         console.error('Could not verify Google account authorization.', error);
         if (!active) return;
-        setCurrentUser(null);
         setCurrentRole(null);
+        setOnlineAccess('error');
         setMode((currentMode) => currentMode === 'cloud' ? null : currentMode);
         setAccessError('Your Google account authorization could not be verified. Please try again.');
-        await signOut(auth).catch(() => undefined);
       } finally {
         if (active) setAuthChecked(true);
       }
@@ -300,15 +310,17 @@ function App() {
   const enterCloudMode = async () => {
     setAccessBusy(true);
     setAccessError('');
+    let user = currentUser;
     try {
-      const user = currentUser || (await signInWithPopup(auth, googleProvider)).user;
-      const invitation = await getApprovedInvitation(user);
+      user = user || (await signInWithPopup(auth, googleProvider)).user;
+      setCurrentUser(user);
+      setOnlineAccess('checking');
+      const access = await checkCurrentUserAccess(user);
 
-      if (!invitation) {
-        setCurrentUser(null);
+      if (!access.allowed) {
         setCurrentRole(null);
-        setAccessError(NOT_AUTHORIZED_MESSAGE);
-        await signOut(auth).catch((error) => console.error('Could not sign out an unauthorized account.', error));
+        setOnlineAccess('unauthorized');
+        setMode(null);
         return;
       }
 
@@ -316,7 +328,8 @@ function App() {
       dbRef.current = loaded;
       setDb(loaded);
       setCurrentUser(user);
-      setCurrentRole(invitation.role);
+      setCurrentRole(access.role);
+      setOnlineAccess('authorized');
       setMode('cloud');
       setSyncState('Synced with Firestore');
     } catch (error) {
@@ -324,8 +337,64 @@ function App() {
         ? 'Google sign-in was cancelled.'
         : error.code === 'auth/operation-not-allowed'
           ? 'Google sign-in is not enabled for this Firebase project.'
-          : error.message || 'Could not sign in with Google.';
+          : 'Your Google account authorization could not be verified. Please try again.';
+      console.error('Could not open the online workspace.', error);
+      setOnlineAccess(user ? 'error' : 'signed-out');
       setAccessError(message);
+    } finally {
+      setAccessBusy(false);
+    }
+  };
+
+  const submitAccessRequest = async () => {
+    if (!currentUser || requestBusy) return;
+    setRequestBusy(true);
+    setAccessError('');
+    setRequestMessage('');
+
+    try {
+      const result = await requestCurrentUserAccess();
+      if (result.status === 'created') {
+        setRequestState('created');
+        setRequestMessage(`Access request sent. An administrator must approve your account before you can use ${APP_DISPLAY_NAME}.`);
+      } else if (result.status === 'pending') {
+        setRequestState('pending');
+        setRequestMessage('Your access request is awaiting administrator approval.');
+      } else if (result.status === 'already-approved') {
+        setRequestState('idle');
+        await enterCloudMode();
+      } else if (result.status === 'rejected') {
+        setRequestState('rejected');
+        setAccessError('Your access request was not approved. Please contact an administrator.');
+      } else {
+        throw new Error('Unexpected access request response.');
+      }
+    } catch (error) {
+      console.error('Could not submit the access request.', error);
+      const deniedCodes = new Set(['functions/permission-denied', 'functions/unauthenticated', 'functions/failed-precondition', 'functions/not-found']);
+      setRequestState('error');
+      setAccessError(deniedCodes.has(error.code)
+        ? 'This account cannot request access to Ascension Manager. Please contact an administrator.'
+        : 'Could not send the access request. Please try again.');
+    } finally {
+      setRequestBusy(false);
+    }
+  };
+
+  const useAnotherGoogleAccount = async () => {
+    setAccessBusy(true);
+    try {
+      await signOut(auth);
+      setMode(null);
+      setCurrentUser(null);
+      setCurrentRole(null);
+      setOnlineAccess('signed-out');
+      setAccessError('');
+      setRequestState('idle');
+      setRequestMessage('');
+    } catch (error) {
+      console.error('Could not sign out.', error);
+      setAccessError('Could not sign out. Please try again.');
     } finally {
       setAccessBusy(false);
     }
@@ -707,14 +776,21 @@ function App() {
     ['Settings', Settings]
   ];
 
-  if (!mode || (mode === 'cloud' && (!authChecked || !currentUser))) {
+  if (!mode || (mode === 'cloud' && (!authChecked || onlineAccess !== 'authorized' || !currentUser))) {
     return (
       <AccessGate
         authChecked={authChecked}
         busy={accessBusy}
         error={accessError}
         user={currentUser}
+        onlineAccess={onlineAccess}
+        requestBusy={requestBusy}
+        requestState={requestState}
+        requestMessage={requestMessage}
         enterCloudMode={enterCloudMode}
+        submitAccessRequest={submitAccessRequest}
+        checkAgain={enterCloudMode}
+        useAnotherGoogleAccount={useAnotherGoogleAccount}
         enterOfflineMode={enterOfflineMode}
       />
     );
@@ -868,7 +944,24 @@ function App() {
   );
 }
 
-function AccessGate({ authChecked, busy, error, user, enterCloudMode, enterOfflineMode }) {
+function AccessGate({
+  authChecked,
+  busy,
+  error,
+  user,
+  onlineAccess,
+  requestBusy,
+  requestState,
+  requestMessage,
+  enterCloudMode,
+  submitAccessRequest,
+  checkAgain,
+  useAnotherGoogleAccount,
+  enterOfflineMode
+}) {
+  const unauthorized = authChecked && user && onlineAccess === 'unauthorized';
+  const requestPending = requestState === 'created' || requestState === 'pending';
+
   return (
     <main className="access-page">
       <section className="access-card">
@@ -883,15 +976,30 @@ function AccessGate({ authChecked, busy, error, user, enterCloudMode, enterOffli
           Sign in to keep your workspace securely in Firestore across devices, or continue offline with data stored only in this browser.
         </p>
         <div className="access-options">
-          <button className="access-option cloud-option" onClick={enterCloudMode} disabled={busy || !authChecked}>
-            <span className="option-icon google-mark">G</span>
-            <span>
-              <strong>{user ? `Continue as ${user.displayName || user.email}` : 'Continue with Google'}</strong>
-              <small>Online workspace · synced with Firestore</small>
-            </span>
-            <Cloud size={22} />
-          </button>
-          <button className="access-option" onClick={enterOfflineMode} disabled={busy}>
+          {unauthorized ? (
+            <section className="access-request-panel" aria-live="polite">
+              <strong>Your account does not currently have access to Ascension Manager.</strong>
+              <p>An administrator must approve your account before you can use the online workspace.</p>
+              <button className="primary access-request-button" onClick={submitAccessRequest} disabled={requestBusy || requestPending}>
+                {requestBusy ? 'Sending request…' : requestPending ? 'Awaiting approval' : 'Request Access'}
+              </button>
+              {requestMessage && <p className="access-request-message">{requestMessage}</p>}
+              <div className="access-request-actions">
+                <button onClick={checkAgain} disabled={busy || requestBusy}>Check Again</button>
+                <button onClick={useAnotherGoogleAccount} disabled={busy || requestBusy}>Use another Google account</button>
+              </div>
+            </section>
+          ) : (
+            <button className="access-option cloud-option" onClick={enterCloudMode} disabled={busy || !authChecked}>
+              <span className="option-icon google-mark">G</span>
+              <span>
+                <strong>{user ? `Continue as ${user.displayName || user.email}` : 'Continue with Google'}</strong>
+                <small>Online workspace · synced with Firestore</small>
+              </span>
+              <Cloud size={22} />
+            </button>
+          )}
+          <button className="access-option" onClick={enterOfflineMode} disabled={busy || requestBusy}>
             <span className="option-icon"><HardDrive size={23} /></span>
             <span>
               <strong>Work locally offline</strong>
@@ -903,6 +1011,12 @@ function AccessGate({ authChecked, busy, error, user, enterCloudMode, enterOffli
         {!authChecked && <p className="access-message">Checking your Google sign-in…</p>}
         {busy && authChecked && <p className="access-message">Opening your workspace…</p>}
         {error && <p className="access-error" role="alert">{error}</p>}
+        {authChecked && user && onlineAccess === 'error' && (
+          <div className="access-request-actions">
+            <button onClick={checkAgain} disabled={busy}>Check Again</button>
+            <button onClick={useAnotherGoogleAccount} disabled={busy}>Use another Google account</button>
+          </div>
+        )}
         <p className="access-footnote">You can export a universal backup from Settings in either mode.</p>
       </section>
     </main>

@@ -8,10 +8,17 @@ service cloud.firestore {
         && request.auth.token.firebase.sign_in_provider == 'google.com';
     }
 
-    function isApprovedAscensionUser() {
+    function ascensionFirebaseAppId() {
+      return '1:379503088311:web:7b5117cc3447eded133332';
+    }
+
+    function hasAscensionManagerAccess() {
       return isGoogleUser()
-        && exists(/databases/$(database)/documents/invitedEmails/$(request.auth.token.email.lower()))
-        && get(/databases/$(database)/documents/invitedEmails/$(request.auth.token.email.lower())).data.active == true;
+        && exists(/databases/$(database)/documents/accessUsers/$(request.auth.token.email.lower()))
+        && get(/databases/$(database)/documents/accessUsers/$(request.auth.token.email.lower())).data.active == true
+        && get(/databases/$(database)/documents/accessUsers/$(request.auth.token.email.lower())).data.apps[ascensionFirebaseAppId()] == true
+        && exists(/databases/$(database)/documents/appRegistry/$(ascensionFirebaseAppId()))
+        && get(/databases/$(database)/documents/appRegistry/$(ascensionFirebaseAppId())).data.active == true;
     }
 
     // Existing shared-project rule. Keep unrelated /users data behavior unchanged.
@@ -19,18 +26,34 @@ service cloud.firestore {
       allow read, write: if request.auth != null && request.auth.uid == uid;
     }
 
-    // Users can read only their own approval record. Client writes are never allowed.
+    // Preserve the legacy invite collection's self-read/no-write behavior.
+    // Ascension Manager no longer uses it as an access decision.
     match /invitedEmails/{email} {
       allow get: if isGoogleUser() && email == request.auth.token.email.lower();
       allow list, create, update, delete: if false;
     }
 
     match /ascensionManagerUsers/{userId} {
-      allow read, write: if isApprovedAscensionUser() && request.auth.uid == userId;
+      allow read, write: if hasAscensionManagerAccess() && request.auth.uid == userId;
 
       match /{document=**} {
-        allow read, write: if isApprovedAscensionUser() && request.auth.uid == userId;
+        allow read, write: if hasAscensionManagerAccess() && request.auth.uid == userId;
       }
+    }
+
+    // Access Manager collections are callable-function-only. Its Admin SDK
+    // operations bypass these client rules after enforcing identity server-side.
+    match /accessUsers/{document=**} {
+      allow read, write: if false;
+    }
+    match /appRegistry/{document=**} {
+      allow read, write: if false;
+    }
+    match /accessRequests/{document=**} {
+      allow read, write: if false;
+    }
+    match /accessRequestKeys/{document=**} {
+      allow read, write: if false;
     }
   }
 }
