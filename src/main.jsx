@@ -3,6 +3,7 @@ import { createRoot } from 'react-dom/client';
 import {
   ArrowDown,
   ArrowUp,
+  ArrowUpDown,
   Award,
   Bell,
   Camera,
@@ -178,7 +179,7 @@ function normalizeDb(value) {
         Object.entries(p.results || {}).forEach(([level, result]) => {
           results[normalizeStoredLevel(level)] = result;
         });
-        return { ...p, currentLevel: normalizeStoredLevel(p.currentLevel), results };
+        return { ...p, currentLevel: normalizeStoredLevel(p.currentLevel), nextCompetitionDate: p.nextCompetitionDate || '', results };
       })
     : [];
   return {
@@ -882,7 +883,11 @@ function StudentsPage({ db, query, setQuery, setModal, deleteStudent, students }
         <SearchBox query={query} setQuery={setQuery} placeholder="Search students, admission no, class..." />
         <button className="primary" onClick={() => setModal({ type: 'student' })}><Plus size={18} /> Add Student</button>
       </div>
-      <PagedTable rows={students} columns={['Student', 'Admission No', 'Class', 'Gender', 'School', 'Contact', 'Actions']} render={(s) => (
+      <PagedTable
+        rows={students}
+        columns={['Student', 'Admission No', 'Class', 'Gender', 'School', 'Contact', 'Actions']}
+        sortValue={(student, column) => [student.name, student.admissionNo, classDivision(student), student.gender, student.schoolName, student.contact, student.id][column]}
+        render={(s) => (
         <tr key={s.id}>
           <td><Person student={s} /></td>
           <td>{s.admissionNo}</td>
@@ -895,13 +900,26 @@ function StudentsPage({ db, query, setQuery, setModal, deleteStudent, students }
             <button className="icon danger" title="Delete student" onClick={() => deleteStudent(s.id)}><Trash2 size={16} /></button>
           </td>
         </tr>
-      )} />
+        )}
+      />
     </section>
   );
 }
 
 function ItemsPage({ db, studentsById, expanded, setExpanded, setModal, deleteItem, deleteCategory, save }) {
-  const sorted = [...db.items].sort((a, b) => (a.type === b.type ? a.name.localeCompare(b.name) : a.type === 'Group' ? -1 : 1));
+  const [sortIndex, setSortIndex] = useState(0);
+  const [sortDirection, setSortDirection] = useState(1);
+  const itemColumns = ['Item', 'Category', 'Type', 'Level', 'Actions'];
+  const sorted = sortRows(db.items, sortIndex, sortDirection, (item, column) =>
+    [item.name, item.category, item.type, item.level, item.id][column]
+  );
+  const sortItems = (column) => {
+    if (sortIndex === column) setSortDirection((direction) => direction * -1);
+    else {
+      setSortIndex(column);
+      setSortDirection(1);
+    }
+  };
   const removeMember = (memberId) => {
     const member = db.groupMembers.find((m) => m.id === memberId);
     save({
@@ -915,7 +933,7 @@ function ItemsPage({ db, studentsById, expanded, setExpanded, setModal, deleteIt
     const nextMembers = [...db.groupMembers, { id: uid(), itemId: item.id, studentId }];
     const nextParticipations = db.participations.some((p) => p.itemId === item.id && p.studentId === studentId)
       ? db.participations
-      : [...db.participations, { id: uid(), studentId, itemId: item.id, currentLevel: normalizeLevel(item.level || 'School Level'), ended: false, results: {} }];
+      : [...db.participations, { id: uid(), studentId, itemId: item.id, currentLevel: normalizeLevel(item.level || 'School Level'), nextCompetitionDate: '', ended: false, results: {} }];
     save({ ...db, groupMembers: nextMembers, participations: nextParticipations });
   };
   return (
@@ -928,7 +946,15 @@ function ItemsPage({ db, studentsById, expanded, setExpanded, setModal, deleteIt
       </div>
       <div className="table-wrap">
         <table>
-          <thead><tr><th>Item</th><th>Category</th><th>Type</th><th>Level</th><th>Actions</th></tr></thead>
+          <thead><tr>{itemColumns.map((column, index) => (
+            <SortableHeader
+              key={column}
+              label={column}
+              active={sortIndex === index}
+              direction={sortDirection}
+              onClick={() => sortItems(index)}
+            />
+          ))}</tr></thead>
           <tbody>
             {sorted.map((item) => {
               const members = db.groupMembers.filter((m) => m.itemId === item.id);
@@ -987,6 +1013,7 @@ function ParticipationPage({ rows, db, studentsById, itemsById, query, setQuery,
         studentId: m.studentId,
         itemId: m.itemId,
         currentLevel: normalizeLevel(itemsById[m.itemId]?.level || 'School Level'),
+        nextCompetitionDate: '',
         ended: false,
         results: {}
       }));
@@ -1016,6 +1043,10 @@ function ParticipationPage({ rows, db, studentsById, itemsById, query, setQuery,
   const groupLevel = (participations) => {
     const unique = [...new Set(participations.map((p) => normalizeLevel(p.currentLevel)))];
     return unique.length === 1 ? formatLevel(unique[0]) : 'Mixed levels';
+  };
+  const groupDate = (participations) => {
+    const dates = [...new Set(participations.map((p) => p.nextCompetitionDate || ''))];
+    return dates.length === 1 ? formatCompetitionDate(dates[0]) : 'Multiple dates';
   };
   const groupedRows = useMemo(() => {
     const groups = {};
@@ -1050,6 +1081,7 @@ function ParticipationPage({ rows, db, studentsById, itemsById, query, setQuery,
           ) : <span className="muted">Group controlled</span>}
         </td>
         <td><button className={`level-pill ${p.ended ? 'stopped' : ''}`} onClick={() => setModal({ type: 'result', participation: p, level: normalizeLevel(p.currentLevel) })}>{formatLevel(p.currentLevel)}</button></td>
+        <td><button className="date-button" onClick={() => setModal({ type: 'participation', participation: p })}>{formatCompetitionDate(p.nextCompetitionDate)}</button></td>
         <td><button className={p.ended ? 'ghost success-text' : 'ghost danger-text'} onClick={() => endHere(p)}>End here</button></td>
         <td>{formatResult(result)}</td>
         <td className="actions">
@@ -1067,7 +1099,29 @@ function ParticipationPage({ rows, db, studentsById, itemsById, query, setQuery,
         <button className="primary" onClick={() => setModal({ type: 'participation' })}><Plus size={18} /> Add Participation</button>
       </div>
       <FilterBar db={db} filters={filters} setFilters={setFilters} query={query} setQuery={setQuery} compact levels={levels} />
-      <PagedTable rows={groupedRows} columns={['Student / Group', 'Item', 'Category', 'Increase Level', 'Current Level', 'End', 'Result', 'Actions']} allowPageSize render={(row) => {
+      <PagedTable
+        rows={groupedRows}
+        columns={['Student / Group', 'Item', 'Category', 'Increase Level', 'Current Level', 'Next Competition Date', 'End', 'Result', 'Actions']}
+        sortValue={(row, column) => {
+          const participations = row.kind === 'group' ? row.participations : [row.participation];
+          const first = participations[0] || {};
+          const student = studentsById[first.studentId];
+          const item = row.kind === 'group' ? row.item : itemsById[first.itemId];
+          const result = first.results?.[first.currentLevel] || {};
+          return [
+            row.kind === 'group' ? item?.name : student?.name,
+            item?.name,
+            item?.category,
+            levelRank(first.currentLevel, levels.filter(Boolean)),
+            first.currentLevel,
+            first.nextCompetitionDate || '',
+            participations.every((p) => p.ended),
+            formatResult(result),
+            row.kind === 'group' ? item?.id : first.id
+          ][column];
+        }}
+        allowPageSize
+        render={(row) => {
         if (row.kind === 'single') return renderParticipationRow(row.participation);
         const open = Boolean(openGroups[row.item.id]);
         const allEnded = row.participations.every((p) => p.ended);
@@ -1088,6 +1142,7 @@ function ParticipationPage({ rows, db, studentsById, itemsById, query, setQuery,
                 </div>
               </td>
               <td><button className={`level-pill readonly ${allEnded ? 'stopped' : ''}`} onClick={() => setModal({ type: 'groupResult', participations: row.participations, item: row.item })}>{groupLevel(row.participations)}</button></td>
+              <td>{groupDate(row.participations)}</td>
               <td><button className={allEnded ? 'ghost success-text' : 'ghost danger-text'} onClick={() => toggleGroupEnd(row.participations)}>End here</button></td>
               <td>Click level to enter result</td>
               <td></td>
@@ -1095,7 +1150,8 @@ function ParticipationPage({ rows, db, studentsById, itemsById, query, setQuery,
             {open && row.participations.map((p) => renderParticipationRow(p, 'member-row-inline', false))}
           </React.Fragment>
         );
-      }} />
+        }}
+      />
     </section>
   );
 }
@@ -1264,7 +1320,7 @@ function StudentModal({ data, db, save, close, notify, addCategory, levels }) {
         item = { ...newItem, id: uid(), name: newItem.name.trim() };
         next.items = [...next.items, item];
       }
-      next.participations = [...next.participations, { id: uid(), studentId: student.id, itemId: item.id, currentLevel: normalizeLevel(item.level || 'School Level'), ended: false, results: {} }];
+      next.participations = [...next.participations, { id: uid(), studentId: student.id, itemId: item.id, currentLevel: normalizeLevel(item.level || 'School Level'), nextCompetitionDate: '', ended: false, results: {} }];
       if (item?.type === 'Group') next.groupMembers = [...next.groupMembers, { id: uid(), studentId: student.id, itemId: item.id }];
     }
     save(next);
@@ -1349,7 +1405,7 @@ function ItemModal({ data, db, save, close, addCategory, levels }) {
 }
 
 function ParticipationModal({ data, db, save, close, levels }) {
-  const [form, setForm] = useState(data || { studentId: db.students[0]?.id || '', itemId: db.items[0]?.id || '', currentLevel: 'School Level', ended: false, results: {} });
+  const [form, setForm] = useState(data || { studentId: db.students[0]?.id || '', itemId: db.items[0]?.id || '', currentLevel: 'School Level', nextCompetitionDate: '', ended: false, results: {} });
   const submit = () => {
     if (!form.studentId || !form.itemId) return;
     const item = db.items.find((i) => i.id === form.itemId);
@@ -1371,6 +1427,7 @@ function ParticipationModal({ data, db, save, close, levels }) {
         <select value={form.studentId} onChange={(e) => setForm({ ...form, studentId: e.target.value })}>{db.students.map((s) => <option key={s.id} value={s.id}>{s.name} ({s.admissionNo})</option>)}</select>
         <select value={form.itemId} onChange={(e) => setForm({ ...form, itemId: e.target.value })}>{db.items.map((i) => <option key={i.id} value={i.id}>{i.name} - {i.type}</option>)}</select>
         <LevelSelect value={form.currentLevel} onChange={(currentLevel) => setForm({ ...form, currentLevel })} levels={levels} />
+        <label className="date-field"><span>Next competition date</span><input type="date" value={form.nextCompetitionDate || ''} onChange={(e) => setForm({ ...form, nextCompetitionDate: e.target.value })} /></label>
       </FormGrid>
       <ModalActions close={close} submit={submit} label="Save Participation" />
     </Modal>
@@ -1592,18 +1649,66 @@ function LevelSelect({ value, onChange, levels }) {
   );
 }
 
-function PagedTable({ rows, columns, render, allowPageSize = false }) {
+function SortableHeader({ label, active, direction, onClick }) {
+  return (
+    <th aria-sort={active ? (direction === 1 ? 'ascending' : 'descending') : 'none'}>
+      <button type="button" className="sort-header" onClick={onClick} title={`Sort by ${label}`}>
+        <span>{label}</span>
+        {active ? (direction === 1 ? <ArrowUp size={14} /> : <ArrowDown size={14} />) : <ArrowUpDown size={14} />}
+      </button>
+    </th>
+  );
+}
+
+function sortRows(rows, sortIndex, sortDirection, sortValue) {
+  return rows
+    .map((row, originalIndex) => ({ row, originalIndex }))
+    .sort((left, right) => {
+      const a = sortValue(left.row, sortIndex);
+      const b = sortValue(right.row, sortIndex);
+      const aEmpty = a === '' || a === null || a === undefined;
+      const bEmpty = b === '' || b === null || b === undefined;
+      if (aEmpty !== bEmpty) return aEmpty ? 1 : -1;
+      if (aEmpty && bEmpty) return left.originalIndex - right.originalIndex;
+
+      const comparison = typeof a === 'number' && typeof b === 'number'
+        ? a - b
+        : String(a).localeCompare(String(b), undefined, { numeric: true, sensitivity: 'base' });
+      return comparison === 0 ? left.originalIndex - right.originalIndex : comparison * sortDirection;
+    })
+    .map(({ row }) => row);
+}
+
+function PagedTable({ rows, columns, render, sortValue = (row) => JSON.stringify(row), allowPageSize = false }) {
   const [page, setPage] = useState(1);
-  const [sortDir, setSortDir] = useState(1);
+  const [sortIndex, setSortIndex] = useState(0);
+  const [sortDirection, setSortDirection] = useState(1);
   const [pageSize, setPageSize] = useState(8);
-  const sorted = [...rows].sort((a, b) => JSON.stringify(a).localeCompare(JSON.stringify(b)) * sortDir);
+  const sorted = sortRows(rows, sortIndex, sortDirection, sortValue);
   const total = Math.max(1, Math.ceil(sorted.length / pageSize));
-  const visible = sorted.slice((page - 1) * pageSize, page * pageSize);
+  const currentPage = Math.min(page, total);
+  const visible = sorted.slice((currentPage - 1) * pageSize, currentPage * pageSize);
+  const sortBy = (column) => {
+    setPage(1);
+    if (sortIndex === column) setSortDirection((direction) => direction * -1);
+    else {
+      setSortIndex(column);
+      setSortDirection(1);
+    }
+  };
   return (
     <>
       <div className="table-wrap">
         <table>
-          <thead><tr>{columns.map((c, i) => <th key={c} onClick={() => i === 0 && setSortDir(sortDir * -1)}>{c}</th>)}</tr></thead>
+          <thead><tr>{columns.map((column, index) => (
+            <SortableHeader
+              key={column}
+              label={column}
+              active={sortIndex === index}
+              direction={sortDirection}
+              onClick={() => sortBy(index)}
+            />
+          ))}</tr></thead>
           <tbody>{visible.map(render)}</tbody>
         </table>
       </div>
@@ -1620,9 +1725,9 @@ function PagedTable({ rows, columns, render, allowPageSize = false }) {
             </select>
           </label>
         )}
-        <button disabled={page === 1} onClick={() => setPage(page - 1)}>Previous</button>
-        <span>Page {page} of {total}</span>
-        <button disabled={page === total} onClick={() => setPage(page + 1)}>Next</button>
+        <button disabled={currentPage === 1} onClick={() => setPage(currentPage - 1)}>Previous</button>
+        <span>Page {currentPage} of {total}</span>
+        <button disabled={currentPage === total} onClick={() => setPage(currentPage + 1)}>Next</button>
       </div>
     </>
   );
@@ -1665,6 +1770,13 @@ function filterStudents(students, query) {
 function formatResult(result) {
   if (!result || (!result.position && !result.grade && !result.graceMarks)) return 'No result';
   return [formatPosition(result.position), formatGrade(result.grade), result.graceMarks ? `${result.graceMarks} grace` : ''].filter(Boolean).join(' | ');
+}
+
+function formatCompetitionDate(value) {
+  if (!value) return 'Set date';
+  const [year, month, day] = String(value).split('-').map(Number);
+  if (!year || !month || !day) return value;
+  return new Intl.DateTimeFormat(undefined, { day: '2-digit', month: 'short', year: 'numeric' }).format(new Date(year, month - 1, day));
 }
 
 function classDivision(student) {

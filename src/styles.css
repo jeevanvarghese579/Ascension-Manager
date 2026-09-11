@@ -479,7 +479,45 @@ th {
   text-transform: uppercase;
   letter-spacing: 0;
   background: #f8fafc;
-  cursor: pointer;
+}
+
+.sort-header {
+  min-height: 26px;
+  width: 100%;
+  justify-content: flex-start;
+  padding: 0;
+  border: 0;
+  border-radius: 4px;
+  background: transparent;
+  color: inherit;
+  font-size: inherit;
+  font-weight: 700;
+  text-transform: inherit;
+}
+
+.sort-header:hover {
+  border-color: transparent;
+  color: #155db4;
+}
+
+.sort-header svg {
+  flex: 0 0 auto;
+}
+
+.date-button {
+  min-height: 32px;
+  padding: 0 9px;
+  color: #1757a7;
+  border-color: #c9dcf4;
+  background: #f6f9ff;
+  white-space: nowrap;
+}
+
+.date-field {
+  display: grid;
+  gap: 6px;
+  color: #526173;
+  font-size: 0.86rem;
 }
 
 .person {
