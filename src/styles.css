@@ -178,6 +178,83 @@ button.access-option:disabled {
   margin-top: 0;
 }
 
+.access-divider {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  color: #8492a6;
+  font-size: 0.8rem;
+  text-transform: uppercase;
+}
+
+.access-divider::before,
+.access-divider::after {
+  content: '';
+  height: 1px;
+  flex: 1;
+  background: #dce5ef;
+}
+
+.email-auth-form {
+  display: grid;
+  gap: 12px;
+  padding: 18px;
+  border: 1px solid #dce5ef;
+  border-radius: 12px;
+  background: #f9fbfd;
+}
+
+.email-auth-form > p {
+  margin: 0;
+  color: #526173;
+  font-size: 0.88rem;
+  line-height: 1.5;
+}
+
+.email-auth-form label {
+  display: grid;
+  gap: 6px;
+  color: #42526a;
+  font-size: 0.86rem;
+  font-weight: 700;
+}
+
+.email-auth-form input {
+  width: 100%;
+  min-height: 42px;
+  padding: 9px 11px;
+  border: 1px solid #cfd9e6;
+  border-radius: 8px;
+  background: #ffffff;
+  color: #152033;
+}
+
+.auth-form-tabs {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 6px;
+  padding: 4px;
+  border-radius: 9px;
+  background: #eaf0f7;
+}
+
+.auth-form-tabs button {
+  border-color: transparent;
+  background: transparent;
+}
+
+.auth-form-tabs button.active {
+  border-color: #c8d6e7;
+  background: #ffffff;
+  color: #1769c2;
+  box-shadow: 0 2px 7px rgba(28, 52, 84, 0.08);
+}
+
+.forgot-password {
+  justify-self: start;
+  padding: 2px 0;
+}
+
 .access-message,
 .access-error,
 .access-footnote {

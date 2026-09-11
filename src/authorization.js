@@ -23,23 +23,21 @@ async function getExistingRole(user) {
 }
 
 export async function checkCurrentUserAccess(user) {
-  const token = await user.getIdTokenResult();
-  if (token.signInProvider !== 'google.com' || token.claims.email_verified !== true) {
-    return { allowed: false, role: null };
-  }
-
   const result = await checkMyAccess({ appId: FIREBASE_APP_ID });
   const data = result.data && typeof result.data === 'object' ? result.data : {};
   const allowed = data.allowed === true;
   return {
     allowed,
+    requestStatus: typeof data.requestStatus === 'string' ? data.requestStatus : null,
+    uid: typeof data.uid === 'string' ? data.uid : user.uid,
+    providerIds: Array.isArray(data.providerIds) ? data.providerIds : user.providerData.map((provider) => provider.providerId),
     role: allowed
       ? (typeof data.role === 'string' ? data.role : await getExistingRole(user))
       : null
   };
 }
 
-export async function requestCurrentUserAccess() {
-  const result = await requestAppAccess({ appId: FIREBASE_APP_ID });
+export async function requestCurrentUserAccess(requestType = 'access-request') {
+  const result = await requestAppAccess({ appId: FIREBASE_APP_ID, requestType });
   return result.data && typeof result.data === 'object' ? result.data : {};
 }

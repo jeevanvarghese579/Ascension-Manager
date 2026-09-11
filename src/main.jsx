@@ -33,7 +33,17 @@ import {
 } from 'lucide-react';
 import html2canvas from 'html2canvas';
 import { jsPDF } from 'jspdf';
-import { onAuthStateChanged, signInWithPopup, signOut } from 'firebase/auth';
+import {
+  createUserWithEmailAndPassword,
+  GoogleAuthProvider,
+  linkWithCredential,
+  onAuthStateChanged,
+  sendEmailVerification,
+  sendPasswordResetEmail,
+  signInWithEmailAndPassword,
+  signInWithPopup,
+  signOut
+} from 'firebase/auth';
 import { auth, googleProvider } from './firebase';
 import { APP_DISPLAY_NAME, checkCurrentUserAccess, requestCurrentUserAccess } from './authorization';
 import { loadCloudData, loadLocalData, saveCloudData, saveLocalData } from './dataStore';
@@ -47,6 +57,20 @@ const STORAGE_KEY = 'ascman-school-participation-db-v1';
 
 const uid = () => crypto.randomUUID();
 const today = () => new Date().toISOString().slice(0, 10);
+const needsPasswordVerification = (user) =>
+  user?.providerData?.some((provider) => provider.providerId === 'password') && !user.emailVerified;
+
+function friendlyAuthError(error, fallback) {
+  const messages = {
+    'auth/invalid-credential': 'The email or password is incorrect.',
+    'auth/email-already-in-use': 'An account already exists for this email. Sign in instead.',
+    'auth/invalid-email': 'Enter a valid email address.',
+    'auth/weak-password': 'Choose a password with at least 6 characters.',
+    'auth/too-many-requests': 'Too many attempts. Please wait and try again.',
+    'auth/account-exists-with-different-credential': 'This email already uses another sign-in method. Sign in with that method, then link providers from the same account.'
+  };
+  return messages[error?.code] || fallback;
+}
 
 const blankPhoto =
   'data:image/svg+xml;utf8,' +
@@ -198,6 +222,8 @@ function App() {
   const [db, setDb] = useState(() => normalizeDb(null));
   const dbRef = useRef(db);
   const saveQueueRef = useRef(Promise.resolve());
+  const newAccountRef = useRef(false);
+  const pendingGoogleCredentialRef = useRef(null);
   const [mode, setMode] = useState(null);
   const [currentUser, setCurrentUser] = useState(null);
   const [currentRole, setCurrentRole] = useState(null);
@@ -208,6 +234,9 @@ function App() {
   const [requestBusy, setRequestBusy] = useState(false);
   const [requestState, setRequestState] = useState('idle');
   const [requestMessage, setRequestMessage] = useState('');
+  const [authEmail, setAuthEmail] = useState('');
+  const [authPassword, setAuthPassword] = useState('');
+  const [authFormMode, setAuthFormMode] = useState('sign-in');
   const [syncState, setSyncState] = useState('');
   const [page, setPage] = useState('Dashboard');
   const [modal, setModal] = useState(null);
@@ -247,6 +276,7 @@ function App() {
         setCurrentUser(null);
         setCurrentRole(null);
         setOnlineAccess('signed-out');
+        newAccountRef.current = false;
         setRequestState('idle');
         setRequestMessage('');
         setMode((currentMode) => currentMode === 'cloud' ? null : currentMode);
@@ -266,7 +296,22 @@ function App() {
         if (!active) return;
 
         if (!access.allowed) {
-          setOnlineAccess('unauthorized');
+          if (access.requestStatus === 'pending') {
+            setOnlineAccess('unauthorized');
+            setRequestState('pending');
+            setRequestMessage('Your access request is awaiting administrator approval.');
+          } else if (access.requestStatus === 'rejected') {
+            setOnlineAccess('unauthorized');
+            setRequestState('rejected');
+            setRequestMessage('Your access request was not approved. Please contact an administrator.');
+          } else if (needsPasswordVerification(user)) {
+            setOnlineAccess('verification-required');
+            setRequestMessage(newAccountRef.current
+              ? 'Your account has been created. Please verify your email before requesting access.'
+              : 'Please verify your email before requesting access.');
+          } else {
+            setOnlineAccess('unauthorized');
+          }
           setMode((currentMode) => currentMode === 'cloud' ? null : currentMode);
           return;
         }
@@ -307,10 +352,10 @@ function App() {
     }
   };
 
-  const enterCloudMode = async () => {
+  const enterCloudMode = async (authenticatedUser = null) => {
     setAccessBusy(true);
     setAccessError('');
-    let user = currentUser;
+    let user = authenticatedUser?.uid ? authenticatedUser : currentUser;
     try {
       user = user || (await signInWithPopup(auth, googleProvider)).user;
       setCurrentUser(user);
@@ -319,7 +364,25 @@ function App() {
 
       if (!access.allowed) {
         setCurrentRole(null);
-        setOnlineAccess('unauthorized');
+        if (access.requestStatus === 'pending') {
+          setOnlineAccess('unauthorized');
+          setRequestState('pending');
+          setRequestMessage('Your access request is awaiting administrator approval.');
+        } else if (access.requestStatus === 'rejected') {
+          setOnlineAccess('unauthorized');
+          setRequestState('rejected');
+          setRequestMessage('Your access request was not approved. Please contact an administrator.');
+        } else if (needsPasswordVerification(user)) {
+          setOnlineAccess('verification-required');
+          setRequestState('idle');
+          setRequestMessage(newAccountRef.current
+            ? 'Your account has been created. Please verify your email before requesting access.'
+            : 'Please verify your email before requesting access.');
+        } else {
+          setOnlineAccess('unauthorized');
+          setRequestState('idle');
+          setRequestMessage('');
+        }
         setMode(null);
         return;
       }
@@ -333,14 +396,141 @@ function App() {
       setMode('cloud');
       setSyncState('Synced with Firestore');
     } catch (error) {
+      if (error.code === 'auth/account-exists-with-different-credential') {
+        pendingGoogleCredentialRef.current = GoogleAuthProvider.credentialFromError(error);
+        if (error.customData?.email) setAuthEmail(error.customData.email);
+        setAuthFormMode('sign-in');
+        setRequestMessage('Sign in with your existing password to securely link Google to the same Firebase account.');
+      }
       const message = error.code === 'auth/popup-closed-by-user'
         ? 'Google sign-in was cancelled.'
         : error.code === 'auth/operation-not-allowed'
           ? 'Google sign-in is not enabled for this Firebase project.'
-          : 'Your Google account authorization could not be verified. Please try again.';
+          : friendlyAuthError(error, 'Your account authorization could not be verified. Please try again.');
       console.error('Could not open the online workspace.', error);
       setOnlineAccess(user ? 'error' : 'signed-out');
       setAccessError(message);
+    } finally {
+      setAccessBusy(false);
+    }
+  };
+
+  const signInWithPassword = async (event) => {
+    event.preventDefault();
+    if (!authEmail.trim() || !authPassword) {
+      setAccessError('Enter your email and password.');
+      return;
+    }
+
+    setAccessBusy(true);
+    setAccessError('');
+    newAccountRef.current = false;
+    try {
+      const credential = await signInWithEmailAndPassword(auth, authEmail.trim(), authPassword);
+      if (pendingGoogleCredentialRef.current) {
+        await linkWithCredential(credential.user, pendingGoogleCredentialRef.current);
+        pendingGoogleCredentialRef.current = null;
+      }
+      setAuthPassword('');
+      await enterCloudMode(credential.user);
+    } catch (error) {
+      console.error('Email/password sign-in failed.', error);
+      setAccessError(friendlyAuthError(error, 'Could not sign in. Please try again.'));
+    } finally {
+      setAccessBusy(false);
+    }
+  };
+
+  const signUpWithPassword = async (event) => {
+    event.preventDefault();
+    if (!authEmail.trim() || authPassword.length < 6) {
+      setAccessError('Enter a valid email and a password with at least 6 characters.');
+      return;
+    }
+
+    setAccessBusy(true);
+    setAccessError('');
+    newAccountRef.current = true;
+    let createdUser = null;
+    try {
+      const credential = await createUserWithEmailAndPassword(auth, authEmail.trim(), authPassword);
+      createdUser = credential.user;
+      await sendEmailVerification(credential.user);
+      setCurrentUser(credential.user);
+      setCurrentRole(null);
+      setOnlineAccess('verification-required');
+      setRequestState('idle');
+      setRequestMessage('Your account has been created. Please verify your email before requesting access.');
+      setAuthPassword('');
+    } catch (error) {
+      console.error('Email/password account creation failed.', error);
+      if (createdUser) {
+        setCurrentUser(createdUser);
+        setOnlineAccess('verification-required');
+        setRequestMessage('Your account has been created, but the verification email could not be sent. Please try resending it.');
+        setAccessError('Could not send the verification email. Please try again.');
+      } else {
+        newAccountRef.current = false;
+        setAccessError(friendlyAuthError(error, 'Could not create the account. Please try again.'));
+      }
+    } finally {
+      setAccessBusy(false);
+    }
+  };
+
+  const resetPassword = async () => {
+    const email = authEmail.trim() || currentUser?.email || '';
+    if (!email) {
+      setAccessError('Enter your email address first.');
+      return;
+    }
+
+    setAccessBusy(true);
+    setAccessError('');
+    try {
+      await sendPasswordResetEmail(auth, email);
+      setRequestMessage('If an account exists for this email, a password reset link has been sent.');
+    } catch (error) {
+      console.error('Password reset failed.', error);
+      setAccessError(friendlyAuthError(error, 'Could not send the password reset email. Please try again.'));
+    } finally {
+      setAccessBusy(false);
+    }
+  };
+
+  const resendVerification = async () => {
+    if (!currentUser) return;
+    setAccessBusy(true);
+    setAccessError('');
+    try {
+      await sendEmailVerification(currentUser);
+      setRequestMessage('Verification email sent. Open the link, then click Check Again.');
+    } catch (error) {
+      console.error('Email verification could not be resent.', error);
+      setAccessError('Could not send the verification email. Please try again.');
+    } finally {
+      setAccessBusy(false);
+    }
+  };
+
+  const checkVerificationAndAccess = async () => {
+    if (!currentUser) return;
+    setAccessBusy(true);
+    setAccessError('');
+    try {
+      await currentUser.reload();
+      const refreshedUser = auth.currentUser;
+      if (!refreshedUser?.emailVerified) {
+        setRequestMessage('Your email is not verified yet. Open the verification link, then try again.');
+        return;
+      }
+      await refreshedUser.getIdToken(true);
+      setCurrentUser(refreshedUser);
+      setOnlineAccess('checking');
+      await enterCloudMode(refreshedUser);
+    } catch (error) {
+      console.error('Could not refresh email verification.', error);
+      setAccessError('Could not check email verification. Please try again.');
     } finally {
       setAccessBusy(false);
     }
@@ -353,14 +543,14 @@ function App() {
     setRequestMessage('');
 
     try {
-      const result = await requestCurrentUserAccess();
+      const result = await requestCurrentUserAccess(newAccountRef.current ? 'new-account' : 'access-request');
       if (result.status === 'created') {
         setRequestState('created');
-        setRequestMessage(`Access request sent. An administrator must approve your account before you can use ${APP_DISPLAY_NAME}.`);
+        setRequestMessage(`Access request sent. Your access request is awaiting administrator approval for ${APP_DISPLAY_NAME}.`);
       } else if (result.status === 'pending') {
         setRequestState('pending');
         setRequestMessage('Your access request is awaiting administrator approval.');
-      } else if (result.status === 'already-approved') {
+      } else if (result.status === 'already-approved' || result.status === 'approved') {
         setRequestState('idle');
         await enterCloudMode();
       } else if (result.status === 'rejected') {
@@ -373,9 +563,14 @@ function App() {
       console.error('Could not submit the access request.', error);
       const deniedCodes = new Set(['functions/permission-denied', 'functions/unauthenticated', 'functions/failed-precondition', 'functions/not-found']);
       setRequestState('error');
-      setAccessError(deniedCodes.has(error.code)
-        ? 'This account cannot request access to Ascension Manager. Please contact an administrator.'
-        : 'Could not send the access request. Please try again.');
+      if (error.code === 'functions/failed-precondition' && needsPasswordVerification(currentUser)) {
+        setOnlineAccess('verification-required');
+        setAccessError('Please verify your email before requesting access.');
+      } else {
+        setAccessError(deniedCodes.has(error.code)
+          ? 'This account cannot request access to Ascension Manager. Please contact an administrator.'
+          : 'Could not send the access request. Please try again.');
+      }
     } finally {
       setRequestBusy(false);
     }
@@ -389,6 +584,8 @@ function App() {
       setCurrentUser(null);
       setCurrentRole(null);
       setOnlineAccess('signed-out');
+      newAccountRef.current = false;
+      pendingGoogleCredentialRef.current = null;
       setAccessError('');
       setRequestState('idle');
       setRequestMessage('');
@@ -787,6 +984,17 @@ function App() {
         requestBusy={requestBusy}
         requestState={requestState}
         requestMessage={requestMessage}
+        authEmail={authEmail}
+        authPassword={authPassword}
+        authFormMode={authFormMode}
+        setAuthEmail={setAuthEmail}
+        setAuthPassword={setAuthPassword}
+        setAuthFormMode={setAuthFormMode}
+        signInWithPassword={signInWithPassword}
+        signUpWithPassword={signUpWithPassword}
+        resetPassword={resetPassword}
+        resendVerification={resendVerification}
+        checkVerificationAndAccess={checkVerificationAndAccess}
         enterCloudMode={enterCloudMode}
         submitAccessRequest={submitAccessRequest}
         checkAgain={enterCloudMode}
@@ -953,6 +1161,17 @@ function AccessGate({
   requestBusy,
   requestState,
   requestMessage,
+  authEmail,
+  authPassword,
+  authFormMode,
+  setAuthEmail,
+  setAuthPassword,
+  setAuthFormMode,
+  signInWithPassword,
+  signUpWithPassword,
+  resetPassword,
+  resendVerification,
+  checkVerificationAndAccess,
   enterCloudMode,
   submitAccessRequest,
   checkAgain,
@@ -960,7 +1179,9 @@ function AccessGate({
   enterOfflineMode
 }) {
   const unauthorized = authChecked && user && onlineAccess === 'unauthorized';
+  const verificationRequired = authChecked && user && onlineAccess === 'verification-required';
   const requestPending = requestState === 'created' || requestState === 'pending';
+  const requestRejected = requestState === 'rejected';
 
   return (
     <main className="access-page">
@@ -976,28 +1197,56 @@ function AccessGate({
           Sign in to keep your workspace securely in Firestore across devices, or continue offline with data stored only in this browser.
         </p>
         <div className="access-options">
-          {unauthorized ? (
+          {verificationRequired ? (
             <section className="access-request-panel" aria-live="polite">
-              <strong>Your account does not currently have access to Ascension Manager.</strong>
+              <strong>Please verify your email before requesting access.</strong>
+              <p>{requestMessage || 'Open the verification link sent to your email address, then check again.'}</p>
+              <div className="access-request-actions">
+                <button className="primary" onClick={checkVerificationAndAccess} disabled={busy}>Check Again</button>
+                <button onClick={resendVerification} disabled={busy}>Resend verification email</button>
+                <button onClick={useAnotherGoogleAccount} disabled={busy}>Sign Out</button>
+              </div>
+            </section>
+          ) : unauthorized ? (
+            <section className="access-request-panel" aria-live="polite">
+              <strong>Your account does not currently have access to this application.</strong>
               <p>An administrator must approve your account before you can use the online workspace.</p>
-              <button className="primary access-request-button" onClick={submitAccessRequest} disabled={requestBusy || requestPending}>
-                {requestBusy ? 'Sending request…' : requestPending ? 'Awaiting approval' : 'Request Access'}
+              <button className="primary access-request-button" onClick={submitAccessRequest} disabled={requestBusy || requestPending || requestRejected}>
+                {requestBusy ? 'Sending request…' : requestPending ? 'Awaiting approval' : requestRejected ? 'Request rejected' : 'Request Access'}
               </button>
               {requestMessage && <p className="access-request-message">{requestMessage}</p>}
               <div className="access-request-actions">
                 <button onClick={checkAgain} disabled={busy || requestBusy}>Check Again</button>
-                <button onClick={useAnotherGoogleAccount} disabled={busy || requestBusy}>Use another Google account</button>
+                <button onClick={useAnotherGoogleAccount} disabled={busy || requestBusy}>Sign Out</button>
               </div>
             </section>
           ) : (
-            <button className="access-option cloud-option" onClick={enterCloudMode} disabled={busy || !authChecked}>
-              <span className="option-icon google-mark">G</span>
-              <span>
-                <strong>{user ? `Continue as ${user.displayName || user.email}` : 'Continue with Google'}</strong>
-                <small>Online workspace · synced with Firestore</small>
-              </span>
-              <Cloud size={22} />
-            </button>
+            <>
+              <button className="access-option cloud-option" onClick={() => enterCloudMode()} disabled={busy || !authChecked}>
+                <span className="option-icon google-mark">G</span>
+                <span>
+                  <strong>{user ? `Continue as ${user.displayName || user.email}` : 'Continue with Google'}</strong>
+                  <small>Online workspace · synced with Firestore</small>
+                </span>
+                <Cloud size={22} />
+              </button>
+              {!user && (
+                <>
+                  <div className="access-divider"><span>or</span></div>
+                  <form className="email-auth-form" onSubmit={authFormMode === 'sign-in' ? signInWithPassword : signUpWithPassword}>
+                    <div className="auth-form-tabs">
+                      <button type="button" className={authFormMode === 'sign-in' ? 'active' : ''} onClick={() => setAuthFormMode('sign-in')}>Sign In</button>
+                      <button type="button" className={authFormMode === 'sign-up' ? 'active' : ''} onClick={() => setAuthFormMode('sign-up')}>Create Account</button>
+                    </div>
+                    {authFormMode === 'sign-up' && <p>Create your account. Administrator approval is required before you can use this application.</p>}
+                    <label>Email<input type="email" value={authEmail} onChange={(event) => setAuthEmail(event.target.value)} autoComplete="email" required /></label>
+                    <label>Password<input type="password" value={authPassword} onChange={(event) => setAuthPassword(event.target.value)} autoComplete={authFormMode === 'sign-in' ? 'current-password' : 'new-password'} minLength="6" required /></label>
+                    <button className="primary" type="submit" disabled={busy}>{authFormMode === 'sign-in' ? 'Sign In' : 'Create Account'}</button>
+                    {authFormMode === 'sign-in' && <button className="link-button forgot-password" type="button" onClick={resetPassword} disabled={busy}>Forgot Password?</button>}
+                  </form>
+                </>
+              )}
+            </>
           )}
           <button className="access-option" onClick={enterOfflineMode} disabled={busy || requestBusy}>
             <span className="option-icon"><HardDrive size={23} /></span>
@@ -1010,11 +1259,12 @@ function AccessGate({
         </div>
         {!authChecked && <p className="access-message">Checking your Google sign-in…</p>}
         {busy && authChecked && <p className="access-message">Opening your workspace…</p>}
+        {requestMessage && !unauthorized && !verificationRequired && <p className="access-message" role="status">{requestMessage}</p>}
         {error && <p className="access-error" role="alert">{error}</p>}
         {authChecked && user && onlineAccess === 'error' && (
           <div className="access-request-actions">
             <button onClick={checkAgain} disabled={busy}>Check Again</button>
-            <button onClick={useAnotherGoogleAccount} disabled={busy}>Use another Google account</button>
+            <button onClick={useAnotherGoogleAccount} disabled={busy}>Sign Out</button>
           </div>
         )}
         <p className="access-footnote">You can export a universal backup from Settings in either mode.</p>
