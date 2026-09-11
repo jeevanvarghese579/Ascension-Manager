@@ -1,4 +1,7 @@
 {
+  "firestore": {
+    "rules": "firestore.ascension-manager.rules"
+  },
   "hosting": {
     "site": "ascension-manager",
     "public": "dist",

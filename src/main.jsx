@@ -35,11 +35,12 @@ import html2canvas from 'html2canvas';
 import { jsPDF } from 'jspdf';
 import { onAuthStateChanged, signInWithPopup, signOut } from 'firebase/auth';
 import { auth, googleProvider } from './firebase';
+import { getApprovedInvitation, NOT_AUTHORIZED_MESSAGE } from './authorization';
 import { loadCloudData, loadLocalData, saveCloudData, saveLocalData } from './dataStore';
 import './styles.css';
 
 const APP_NAME = 'School Programmes Ascention Manager';
-const APP_VERSION = '3.0.8';
+const APP_VERSION = 'v1.2';
 const DEFAULT_LEVELS = ['School Level', 'Sub District', 'District', 'State', 'National'];
 const DEFAULT_CATEGORIES = ['Arts', 'Sports'];
 const STORAGE_KEY = 'ascman-school-participation-db-v1';
@@ -199,6 +200,7 @@ function App() {
   const saveQueueRef = useRef(Promise.resolve());
   const [mode, setMode] = useState(null);
   const [currentUser, setCurrentUser] = useState(null);
+  const [currentRole, setCurrentRole] = useState(null);
   const [authChecked, setAuthChecked] = useState(false);
   const [accessBusy, setAccessBusy] = useState(false);
   const [accessError, setAccessError] = useState('');
@@ -230,10 +232,54 @@ function App() {
     }
   });
 
-  useEffect(() => onAuthStateChanged(auth, (user) => {
-    setCurrentUser(user);
-    setAuthChecked(true);
-  }), []);
+  useEffect(() => {
+    let active = true;
+
+    const unsubscribe = onAuthStateChanged(auth, async (user) => {
+      if (!active) return;
+      setAuthChecked(false);
+
+      if (!user) {
+        setCurrentUser(null);
+        setCurrentRole(null);
+        setMode((currentMode) => currentMode === 'cloud' ? null : currentMode);
+        setAuthChecked(true);
+        return;
+      }
+
+      try {
+        const invitation = await getApprovedInvitation(user);
+        if (!active) return;
+
+        if (!invitation) {
+          setCurrentUser(null);
+          setCurrentRole(null);
+          setMode((currentMode) => currentMode === 'cloud' ? null : currentMode);
+          setAccessError(NOT_AUTHORIZED_MESSAGE);
+          await signOut(auth).catch((error) => console.error('Could not sign out an unauthorized account.', error));
+          return;
+        }
+
+        setCurrentUser(user);
+        setCurrentRole(invitation.role);
+      } catch (error) {
+        console.error('Could not verify Google account authorization.', error);
+        if (!active) return;
+        setCurrentUser(null);
+        setCurrentRole(null);
+        setMode((currentMode) => currentMode === 'cloud' ? null : currentMode);
+        setAccessError('Your Google account authorization could not be verified. Please try again.');
+        await signOut(auth).catch(() => undefined);
+      } finally {
+        if (active) setAuthChecked(true);
+      }
+    });
+
+    return () => {
+      active = false;
+      unsubscribe();
+    };
+  }, []);
 
   const enterOfflineMode = async () => {
     setAccessBusy(true);
@@ -256,10 +302,21 @@ function App() {
     setAccessError('');
     try {
       const user = currentUser || (await signInWithPopup(auth, googleProvider)).user;
+      const invitation = await getApprovedInvitation(user);
+
+      if (!invitation) {
+        setCurrentUser(null);
+        setCurrentRole(null);
+        setAccessError(NOT_AUTHORIZED_MESSAGE);
+        await signOut(auth).catch((error) => console.error('Could not sign out an unauthorized account.', error));
+        return;
+      }
+
       const loaded = await loadCloudData(user.uid, seedData, normalizeDb);
       dbRef.current = loaded;
       setDb(loaded);
       setCurrentUser(user);
+      setCurrentRole(invitation.role);
       setMode('cloud');
       setSyncState('Synced with Firestore');
     } catch (error) {
@@ -277,6 +334,7 @@ function App() {
   const leaveSession = async () => {
     if (mode === 'cloud') await signOut(auth);
     setMode(null);
+    setCurrentRole(null);
     setPage('Dashboard');
     setModal(null);
     setAccessError('');
@@ -649,7 +707,7 @@ function App() {
     ['Settings', Settings]
   ];
 
-  if (!mode) {
+  if (!mode || (mode === 'cloud' && (!authChecked || !currentUser))) {
     return (
       <AccessGate
         authChecked={authChecked}
@@ -842,7 +900,8 @@ function AccessGate({ authChecked, busy, error, user, enterCloudMode, enterOffli
             <HardDrive size={22} />
           </button>
         </div>
-        {busy && <p className="access-message">Opening your workspace…</p>}
+        {!authChecked && <p className="access-message">Checking your Google sign-in…</p>}
+        {busy && authChecked && <p className="access-message">Opening your workspace…</p>}
         {error && <p className="access-error" role="alert">{error}</p>}
         <p className="access-footnote">You can export a universal backup from Settings in either mode.</p>
       </section>
