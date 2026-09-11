@@ -8,8 +8,8 @@ const firebaseConfig = {
   projectId: "inter-level-progress-manager",
   storageBucket: "inter-level-progress-manager.firebasestorage.app",
   messagingSenderId: "379503088311",
-  appId: "1:379503088311:web:85555d3a6281bb22133332",
-  measurementId: "G-XPC2J153VC"
+  appId: "1:379503088311:web:7b5117cc3447eded133332",
+  measurementId: "G-JRX8DC5QGC"
 };
 
 const app = initializeApp(firebaseConfig);

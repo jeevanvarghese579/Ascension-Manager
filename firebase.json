@@ -1,6 +1,6 @@
 {
   "hosting": {
-    "site": "school-programmes-ascention-manager",
+    "site": "ascension-manager",
     "public": "dist",
     "ignore": [
       "firebase.json",
