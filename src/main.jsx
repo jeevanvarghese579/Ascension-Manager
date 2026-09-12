@@ -57,8 +57,10 @@ const STORAGE_KEY = 'ascman-school-participation-db-v1';
 
 const uid = () => crypto.randomUUID();
 const today = () => new Date().toISOString().slice(0, 10);
-const needsPasswordVerification = (user) =>
-  user?.providerData?.some((provider) => provider.providerId === 'password') && !user.emailVerified;
+const needsPasswordVerification = (access, user) =>
+  access?.requireEmailVerification === true &&
+  access?.signInProvider === 'password' &&
+  !user?.emailVerified;
 
 function friendlyAuthError(error, fallback) {
   const messages = {
@@ -224,6 +226,7 @@ function App() {
   const saveQueueRef = useRef(Promise.resolve());
   const newAccountRef = useRef(false);
   const pendingGoogleCredentialRef = useRef(null);
+  const accessPolicyRef = useRef(null);
   const [mode, setMode] = useState(null);
   const [currentUser, setCurrentUser] = useState(null);
   const [currentRole, setCurrentRole] = useState(null);
@@ -276,6 +279,7 @@ function App() {
         setCurrentUser(null);
         setCurrentRole(null);
         setOnlineAccess('signed-out');
+        accessPolicyRef.current = null;
         newAccountRef.current = false;
         setRequestState('idle');
         setRequestMessage('');
@@ -293,6 +297,7 @@ function App() {
 
       try {
         const access = await checkCurrentUserAccess(user);
+        accessPolicyRef.current = access;
         if (!active) return;
 
         if (!access.allowed) {
@@ -304,7 +309,7 @@ function App() {
             setOnlineAccess('unauthorized');
             setRequestState('rejected');
             setRequestMessage('Your access request was not approved. Please contact an administrator.');
-          } else if (needsPasswordVerification(user)) {
+          } else if (needsPasswordVerification(access, user)) {
             setOnlineAccess('verification-required');
             setRequestMessage(newAccountRef.current
               ? 'Your account has been created. Please verify your email before requesting access.'
@@ -361,6 +366,7 @@ function App() {
       setCurrentUser(user);
       setOnlineAccess('checking');
       const access = await checkCurrentUserAccess(user);
+      accessPolicyRef.current = access;
 
       if (!access.allowed) {
         setCurrentRole(null);
@@ -372,7 +378,7 @@ function App() {
           setOnlineAccess('unauthorized');
           setRequestState('rejected');
           setRequestMessage('Your access request was not approved. Please contact an administrator.');
-        } else if (needsPasswordVerification(user)) {
+        } else if (needsPasswordVerification(access, user)) {
           setOnlineAccess('verification-required');
           setRequestState('idle');
           setRequestMessage(newAccountRef.current
@@ -452,23 +458,47 @@ function App() {
     setAccessError('');
     newAccountRef.current = true;
     let createdUser = null;
+    let verificationWasRequired = false;
     try {
       const credential = await createUserWithEmailAndPassword(auth, authEmail.trim(), authPassword);
       createdUser = credential.user;
-      await sendEmailVerification(credential.user);
+      const access = await checkCurrentUserAccess(credential.user);
+      accessPolicyRef.current = access;
       setCurrentUser(credential.user);
       setCurrentRole(null);
-      setOnlineAccess('verification-required');
       setRequestState('idle');
-      setRequestMessage('Your account has been created. Please verify your email before requesting access.');
       setAuthPassword('');
+
+      if (access.allowed) {
+        await enterCloudMode(credential.user);
+      } else if (needsPasswordVerification(access, credential.user)) {
+        verificationWasRequired = true;
+        await sendEmailVerification(credential.user);
+        setOnlineAccess('verification-required');
+        setRequestMessage('Your account has been created. Please verify your email before requesting access.');
+      } else if (access.requestStatus === 'pending') {
+        setOnlineAccess('unauthorized');
+        setRequestState('pending');
+        setRequestMessage('Your access request is awaiting administrator approval.');
+      } else if (access.requestStatus === 'rejected') {
+        setOnlineAccess('unauthorized');
+        setRequestState('rejected');
+        setRequestMessage('Your access request was not approved. Please contact an administrator.');
+      } else {
+        setOnlineAccess('unauthorized');
+        setRequestMessage('Your account has been created. Request access to continue.');
+      }
     } catch (error) {
       console.error('Email/password account creation failed.', error);
-      if (createdUser) {
+      if (createdUser && verificationWasRequired) {
         setCurrentUser(createdUser);
         setOnlineAccess('verification-required');
         setRequestMessage('Your account has been created, but the verification email could not be sent. Please try resending it.');
         setAccessError('Could not send the verification email. Please try again.');
+      } else if (createdUser) {
+        setCurrentUser(createdUser);
+        setOnlineAccess('error');
+        setAccessError('Your account was created, but the application access policy could not be checked. Please try again.');
       } else {
         newAccountRef.current = false;
         setAccessError(friendlyAuthError(error, 'Could not create the account. Please try again.'));
@@ -563,7 +593,7 @@ function App() {
       console.error('Could not submit the access request.', error);
       const deniedCodes = new Set(['functions/permission-denied', 'functions/unauthenticated', 'functions/failed-precondition', 'functions/not-found']);
       setRequestState('error');
-      if (error.code === 'functions/failed-precondition' && needsPasswordVerification(currentUser)) {
+      if (error.code === 'functions/failed-precondition' && needsPasswordVerification(accessPolicyRef.current, currentUser)) {
         setOnlineAccess('verification-required');
         setAccessError('Please verify your email before requesting access.');
       } else {

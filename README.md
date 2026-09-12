@@ -12,7 +12,7 @@ npm run dev
 At startup, the user chooses one of two workspaces:
 
 - **Continue with Google** authenticates with Firebase Authentication, calls the Access Manager's `checkMyAccess` function using this web app's Firebase App ID, and stores an approved user's records in Firestore under `ascensionManagerUsers/{uid}`.
-- **Email/password** supports sign-in, account creation with email verification, and password reset. Creating an Auth account never grants application access.
+- **Email/password** supports sign-in, account creation, optional per-app email verification, and password reset. Creating an Auth account never grants application access.
 - If Google encounters an existing password account for the same Firebase identity, the user signs in with that password and Firebase links the Google credential to the existing UID; separate UIDs are never merged by email in application code.
 - An unauthorized authenticated user remains signed in on the access screen and can securely call `requestAppAccess`. No email, UID, or user-selected app identifier is sent by the browser.
 - **Work locally offline** stores records in IndexedDB on the current browser and device. Existing `localStorage` data under `ascman-school-participation-db-v1` is migrated automatically the first time local mode is opened.
@@ -24,7 +24,7 @@ Both modes ship with demo students, competition items, group members, participat
 1. Enable Google and Email/Password in Firebase Console → Authentication → Sign-in method.
 2. Add every deployed or development hostname to Authentication → Settings → Authorized domains.
 3. Register and enable this Firebase Web App ID in Access Manager: `1:379503088311:web:7b5117cc3447eded133332`.
-4. Deploy the provider-neutral Access Manager callable functions `checkMyAccess` and `requestAppAccess` in `us-central1`. Access Manager stores canonical users by Firebase UID and requires email verification before password users can request access.
+4. Deploy the provider-neutral Access Manager callable functions `checkMyAccess` and `requestAppAccess` in `us-central1`. Access Manager stores canonical users by Firebase UID and returns this app's `requireEmailVerification` policy. When the setting is enabled, new password users must verify before requesting access; when disabled or absent, they may request immediately. Google sessions and existing approved users are unaffected. The backend enforces the same policy in `requestAppAccess`.
 5. Deploy `firestore.ascension-manager.rules`. It preserves the shared project's existing `/users/{uid}` behavior and gates only `ascensionManagerUsers` behind the matching active UID-based Access Manager assignment. Access Manager collections remain inaccessible to browser clients.
 
 ## Data Schema

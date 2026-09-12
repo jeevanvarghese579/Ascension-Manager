@@ -31,6 +31,9 @@ export async function checkCurrentUserAccess(user) {
     requestStatus: typeof data.requestStatus === 'string' ? data.requestStatus : null,
     uid: typeof data.uid === 'string' ? data.uid : user.uid,
     providerIds: Array.isArray(data.providerIds) ? data.providerIds : user.providerData.map((provider) => provider.providerId),
+    signInProvider: typeof data.signInProvider === 'string' ? data.signInProvider : null,
+    emailVerified: data.emailVerified === true,
+    requireEmailVerification: data.requireEmailVerification === true,
     role: allowed
       ? (typeof data.role === 'string' ? data.role : await getExistingRole(user))
       : null
