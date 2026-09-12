@@ -2335,7 +2335,7 @@ function CollageSheet({ entries, collageFilter }) {
               {details.category && item?.category && <span>{label('Category', item.category)}</span>}
               {details.type && item?.type && <span>{item.type}</span>}
               {details.currentLevel && <span>{label('Level', formatLevel(level))}</span>}
-              {details.position && result.position && <b>{label('Position', formatPosition(result.position))}</b>}
+              {details.position && result.position && <b>{label('Position', formatOrdinal(result.position))}</b>}
               {details.grade && result.grade && <b>{label('Grade', formatGrade(result.grade))}</b>}
               {details.marks && result.graceMarks && <span>{label('Marks', result.graceMarks)}</span>}
             </div>
@@ -2557,13 +2557,18 @@ function rewriteLevel(db, oldLevel, nextLevel, levels, deleteResults = false) {
 }
 
 function formatPosition(position) {
+  const ordinal = formatOrdinal(position);
+  return ordinal ? `${ordinal} Position` : '';
+}
+
+function formatOrdinal(position) {
   if (!position) return '';
   const text = String(position).trim();
   const number = Number(text);
-  if (!Number.isFinite(number)) return `${text} Position`;
+  if (!Number.isFinite(number)) return text.replace(/\s+position$/i, '');
   const mod100 = number % 100;
   const suffix = mod100 >= 11 && mod100 <= 13 ? 'th' : { 1: 'st', 2: 'nd', 3: 'rd' }[number % 10] || 'th';
-  return `${number}${suffix} Position`;
+  return `${number}${suffix}`;
 }
 
 function formatGrade(grade) {
