@@ -1872,28 +1872,107 @@ function ItemModal({ data, db, save, close, addCategory, levels }) {
 
 function ParticipationModal({ data, db, save, close, levels }) {
   const [form, setForm] = useState(data || { studentId: db.students[0]?.id || '', itemId: db.items[0]?.id || '', currentLevel: 'School Level', nextCompetitionDate: '', ended: false, results: {} });
+  const [addingStudent, setAddingStudent] = useState(false);
+  const [addingItem, setAddingItem] = useState(false);
+  const [newStudent, setNewStudent] = useState({ name: '', admissionNo: '', className: '', division: '', gender: '', schoolName: 'St. Gemmas GHSS Malappuram', contact: '', photo: blankPhoto });
+  const [newItem, setNewItem] = useState({ name: '', category: db.categories[0] || 'Arts', type: 'Individual', level: form.currentLevel || 'School Level' });
+  const initialResult = form.results?.[normalizeLevel(form.currentLevel)] || { position: '', grade: '', graceMarks: 0, remarks: '', date: today() };
+  const [result, setResult] = useState(initialResult);
   const submit = () => {
-    if (!form.studentId || !form.itemId) return;
-    const item = db.items.find((i) => i.id === form.itemId);
+    if (addingStudent && !newStudent.name.trim()) return;
+    if (addingItem && !newItem.name.trim()) return;
+    if (!addingStudent && !form.studentId) return;
+    if (!addingItem && !form.itemId) return;
+
+    const student = addingStudent
+      ? { ...newStudent, id: uid(), name: newStudent.name.trim(), photo: newStudent.photo || blankPhoto }
+      : db.students.find((entry) => entry.id === form.studentId);
+    const item = addingItem
+      ? { ...newItem, id: uid(), name: newItem.name.trim(), level: normalizeLevel(newItem.level) }
+      : db.items.find((entry) => entry.id === form.itemId);
+    if (!student || !item) return;
+
     const currentLevel = Object.prototype.hasOwnProperty.call(form, 'currentLevel') ? normalizeLevel(form.currentLevel) : normalizeLevel(item?.level || 'School Level');
-    const participation = { ...form, id: form.id || uid(), currentLevel };
+    const savedResult = { ...result, graceMarks: Number(result.graceMarks || 0) };
+    const hasResult = savedResult.position || savedResult.grade || savedResult.graceMarks || savedResult.remarks;
+    const participation = {
+      ...form,
+      id: form.id || uid(),
+      studentId: student.id,
+      itemId: item.id,
+      currentLevel,
+      results: hasResult ? { ...(form.results || {}), [currentLevel]: savedResult } : form.results || {}
+    };
     const next = {
       ...db,
+      students: addingStudent ? [...db.students, student] : db.students,
+      items: addingItem ? [...db.items, item] : db.items,
       participations: data ? db.participations.map((p) => (p.id === participation.id ? participation : p)) : [...db.participations, participation]
     };
-    if (item?.type === 'Group' && !next.groupMembers.some((m) => m.itemId === item.id && m.studentId === form.studentId)) {
-      next.groupMembers.push({ id: uid(), itemId: item.id, studentId: form.studentId });
+    if (item?.type === 'Group' && !next.groupMembers.some((m) => m.itemId === item.id && m.studentId === student.id)) {
+      next.groupMembers = [...next.groupMembers, { id: uid(), itemId: item.id, studentId: student.id }];
     }
     save(next);
     close();
   };
   return (
-    <Modal title={data ? 'Edit Participation' : 'Add Participation'} close={close}>
+    <Modal title={data ? 'Edit Participation' : 'Add Participation'} close={close} wide>
+      <div className="participation-entry-heading">
+        <strong>Participant and item</strong>
+        <span>Select existing records or add them here without leaving this page.</span>
+      </div>
       <FormGrid>
-        <select value={form.studentId} onChange={(e) => setForm({ ...form, studentId: e.target.value })}>{db.students.map((s) => <option key={s.id} value={s.id}>{s.name} ({s.admissionNo})</option>)}</select>
-        <select value={form.itemId} onChange={(e) => setForm({ ...form, itemId: e.target.value })}>{db.items.map((i) => <option key={i.id} value={i.id}>{i.name} - {i.type}</option>)}</select>
+        <div className="participation-picker">
+          <label>Participant</label>
+          <select value={form.studentId} onChange={(e) => setForm({ ...form, studentId: e.target.value })} disabled={addingStudent}>
+            <option value="">Choose student</option>
+            {db.students.map((s) => <option key={s.id} value={s.id}>{s.name} ({s.admissionNo})</option>)}
+          </select>
+          {!data && <button className="inline-add-button" onClick={() => setAddingStudent(!addingStudent)}><Plus size={16} />{addingStudent ? 'Use existing student' : 'Add participant'}</button>}
+        </div>
+        <div className="participation-picker">
+          <label>Competition item</label>
+          <select value={form.itemId} onChange={(e) => setForm({ ...form, itemId: e.target.value })} disabled={addingItem}>
+            <option value="">Choose item</option>
+            {db.items.map((i) => <option key={i.id} value={i.id}>{i.name} - {i.type}</option>)}
+          </select>
+          {!data && <button className="inline-add-button" onClick={() => setAddingItem(!addingItem)}><Plus size={16} />{addingItem ? 'Use existing item' : 'Add item'}</button>}
+        </div>
+      </FormGrid>
+      {addingStudent && (
+        <div className="participation-inline-section">
+          <strong>New participant</strong>
+          <FormGrid>
+            <input value={newStudent.name} onChange={(e) => setNewStudent({ ...newStudent, name: e.target.value })} placeholder="Student name" />
+            <input value={newStudent.admissionNo} onChange={(e) => setNewStudent({ ...newStudent, admissionNo: e.target.value })} placeholder="Admission number / ID" />
+            <input value={newStudent.className} onChange={(e) => setNewStudent({ ...newStudent, className: e.target.value })} placeholder="Class" />
+            <input value={newStudent.division} onChange={(e) => setNewStudent({ ...newStudent, division: e.target.value })} placeholder="Division" />
+          </FormGrid>
+        </div>
+      )}
+      {addingItem && (
+        <div className="participation-inline-section">
+          <strong>New competition item</strong>
+          <FormGrid>
+            <input value={newItem.name} onChange={(e) => setNewItem({ ...newItem, name: e.target.value })} placeholder="Item name" />
+            <select value={newItem.category} onChange={(e) => setNewItem({ ...newItem, category: e.target.value })}>{db.categories.map((category) => <option key={category}>{category}</option>)}</select>
+            <select value={newItem.type} onChange={(e) => setNewItem({ ...newItem, type: e.target.value })}><option>Individual</option><option>Group</option></select>
+            <LevelSelect value={newItem.level} onChange={(level) => setNewItem({ ...newItem, level })} levels={levels} />
+          </FormGrid>
+        </div>
+      )}
+      <div className="participation-entry-heading result-heading">
+        <strong>Participation and result</strong>
+        <span>Position can be entered now or updated later.</span>
+      </div>
+      <FormGrid>
         <LevelSelect value={form.currentLevel} onChange={(currentLevel) => setForm({ ...form, currentLevel })} levels={levels} />
         <label className="date-field"><span>Next competition date</span><input type="date" value={form.nextCompetitionDate || ''} onChange={(e) => setForm({ ...form, nextCompetitionDate: e.target.value })} /></label>
+        <input value={result.position} onChange={(e) => setResult({ ...result, position: e.target.value })} placeholder="Position secured" />
+        <input value={result.grade} onChange={(e) => setResult({ ...result, grade: e.target.value })} placeholder="Grade / result" />
+        <input type="number" value={result.graceMarks} onChange={(e) => setResult({ ...result, graceMarks: e.target.value })} placeholder="Grace marks" />
+        <input type="date" value={result.date || ''} onChange={(e) => setResult({ ...result, date: e.target.value })} />
+        <textarea value={result.remarks} onChange={(e) => setResult({ ...result, remarks: e.target.value })} placeholder="Remarks" />
       </FormGrid>
       <ModalActions close={close} submit={submit} label="Save Participation" />
     </Modal>
