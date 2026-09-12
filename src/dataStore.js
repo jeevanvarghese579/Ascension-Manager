@@ -67,8 +67,31 @@ export function saveLocalData(value) {
 const userRoot = (userId) => doc(firestore, CLOUD_ROOT, userId);
 const userCollection = (userId, name) => collection(firestore, CLOUD_ROOT, userId, name);
 
+function logFirestoreOperation(operation, path, details = {}) {
+  console.info('[Ascension Firestore]', {
+    operation,
+    projectId: firestore.app.options.projectId,
+    path,
+    ...details
+  });
+}
+
 export async function loadCloudData(userId, createDefault, normalize) {
-  const rootSnapshot = await getDoc(userRoot(userId));
+  const rootPath = `${CLOUD_ROOT}/${userId}`;
+  logFirestoreOperation('get', rootPath, { uid: userId });
+  let rootSnapshot;
+  try {
+    rootSnapshot = await getDoc(userRoot(userId));
+  } catch (error) {
+    console.error('[Ascension Firestore] Workspace root read denied or failed', {
+      uid: userId,
+      projectId: firestore.app.options.projectId,
+      path: rootPath,
+      code: error?.code || null,
+      message: error?.message || String(error)
+    });
+    throw error;
+  }
   if (!rootSnapshot.exists()) {
     const initial = createDefault();
     await saveCloudData(userId, initial, null);
@@ -78,6 +101,7 @@ export async function loadCloudData(userId, createDefault, normalize) {
   const root = rootSnapshot.data();
   const entries = await Promise.all(
     CLOUD_COLLECTIONS.map(async (name) => {
+      logFirestoreOperation('list', `${CLOUD_ROOT}/${userId}/${name}`, { uid: userId });
       const snapshot = await getDocs(userCollection(userId, name));
       return [name, snapshot.docs.map((entry) => ({ ...entry.data(), id: entry.id }))];
     })
@@ -107,6 +131,7 @@ function changedRecords(previous = [], next = []) {
 }
 
 export async function saveCloudData(userId, value, previous) {
+  logFirestoreOperation('set', `${CLOUD_ROOT}/${userId}`, { uid: userId });
   await setDoc(
     userRoot(userId),
     {
@@ -122,6 +147,10 @@ export async function saveCloudData(userId, value, previous) {
   );
 
   for (let index = 0; index < operations.length; index += 400) {
+    logFirestoreOperation('batch-write', `${CLOUD_ROOT}/${userId}/{collection}/{document}`, {
+      uid: userId,
+      operationCount: Math.min(400, operations.length - index)
+    });
     const batch = writeBatch(firestore);
     operations.slice(index, index + 400).forEach((operation) => {
       const reference = doc(userCollection(userId, operation.collectionName), operation.id);

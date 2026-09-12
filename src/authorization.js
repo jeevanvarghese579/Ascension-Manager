@@ -23,10 +23,17 @@ async function getExistingRole(user) {
 }
 
 export async function checkCurrentUserAccess(user) {
+  const projectId = app.options.projectId;
+  console.info('[Ascension Auth] Checking application access', {
+    uid: user.uid,
+    email: user.email?.trim().toLowerCase() || null,
+    projectId,
+    appId: FIREBASE_APP_ID
+  });
   const result = await checkMyAccess({ appId: FIREBASE_APP_ID });
   const data = result.data && typeof result.data === 'object' ? result.data : {};
   const allowed = data.allowed === true;
-  return {
+  const access = {
     allowed,
     requestStatus: typeof data.requestStatus === 'string' ? data.requestStatus : null,
     uid: typeof data.uid === 'string' ? data.uid : user.uid,
@@ -34,10 +41,23 @@ export async function checkCurrentUserAccess(user) {
     signInProvider: typeof data.signInProvider === 'string' ? data.signInProvider : null,
     emailVerified: data.emailVerified === true,
     requireEmailVerification: data.requireEmailVerification === true,
+    resolvedPermission: data.resolvedPermission && typeof data.resolvedPermission === 'object'
+      ? data.resolvedPermission
+      : null,
     role: allowed
       ? (typeof data.role === 'string' ? data.role : await getExistingRole(user))
       : null
   };
+  console.info('[Ascension Auth] Application access resolved', {
+    uid: access.uid,
+    email: user.email?.trim().toLowerCase() || null,
+    projectId,
+    appId: FIREBASE_APP_ID,
+    allowed: access.allowed,
+    role: access.role,
+    permission: access.resolvedPermission
+  });
+  return access;
 }
 
 export async function requestCurrentUserAccess(requestType = 'access-request') {

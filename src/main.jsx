@@ -44,7 +44,7 @@ import {
   signInWithPopup,
   signOut
 } from 'firebase/auth';
-import { auth, googleProvider } from './firebase';
+import { app, auth, googleProvider } from './firebase';
 import { APP_DISPLAY_NAME, checkCurrentUserAccess, requestCurrentUserAccess } from './authorization';
 import { loadCloudData, loadLocalData, saveCloudData, saveLocalData } from './dataStore';
 import './styles.css';
@@ -393,7 +393,19 @@ function App() {
         return;
       }
 
-      const loaded = await loadCloudData(user.uid, seedData, normalizeDb);
+      if (access.uid !== user.uid || auth.currentUser?.uid !== user.uid) {
+        throw new Error('The authenticated Firebase UID changed while application access was being checked.');
+      }
+
+      console.info('[Ascension Auth] Opening protected workspace', {
+        uid: access.uid,
+        email: user.email?.trim().toLowerCase() || null,
+        projectId: app.options.projectId,
+        appId: app.options.appId,
+        path: `ascensionManagerUsers/${access.uid}`,
+        resolvedPermission: access.resolvedPermission
+      });
+      const loaded = await loadCloudData(access.uid, seedData, normalizeDb);
       dbRef.current = loaded;
       setDb(loaded);
       setCurrentUser(user);
