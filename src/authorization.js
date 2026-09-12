@@ -44,6 +44,9 @@ export async function checkCurrentUserAccess(user) {
     resolvedPermission: data.resolvedPermission && typeof data.resolvedPermission === 'object'
       ? data.resolvedPermission
       : null,
+    canonicalAccessDocument: data.canonicalAccessDocument && typeof data.canonicalAccessDocument === 'object'
+      ? data.canonicalAccessDocument
+      : null,
     role: allowed
       ? (typeof data.role === 'string' ? data.role : await getExistingRole(user))
       : null
@@ -55,7 +58,8 @@ export async function checkCurrentUserAccess(user) {
     appId: FIREBASE_APP_ID,
     allowed: access.allowed,
     role: access.role,
-    permission: access.resolvedPermission
+    permission: access.resolvedPermission,
+    canonicalAccessDocument: access.canonicalAccessDocument
   });
   return access;
 }

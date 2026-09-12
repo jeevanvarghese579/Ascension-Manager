@@ -403,7 +403,8 @@ function App() {
         projectId: app.options.projectId,
         appId: app.options.appId,
         path: `ascensionManagerUsers/${access.uid}`,
-        resolvedPermission: access.resolvedPermission
+        resolvedPermission: access.resolvedPermission,
+        canonicalAccessDocument: access.canonicalAccessDocument
       });
       const loaded = await loadCloudData(access.uid, seedData, normalizeDb);
       dbRef.current = loaded;
