@@ -17,6 +17,7 @@ import {
   GraduationCap,
   Grid2X2,
   HardDrive,
+  Images,
   Layers,
   LogOut,
   Mail,
@@ -26,6 +27,7 @@ import {
   School,
   Search,
   Settings,
+  Shuffle,
   Trash2,
   Upload,
   Users,
@@ -33,6 +35,7 @@ import {
 } from 'lucide-react';
 import html2canvas from 'html2canvas';
 import { jsPDF } from 'jspdf';
+import JSZip from 'jszip';
 import {
   createUserWithEmailAndPassword,
   GoogleAuthProvider,
@@ -252,7 +255,27 @@ function App() {
     category: 'All',
     className: 'All',
     division: 'All',
-    columns: 3,
+    item: 'All',
+    position: 'All',
+    grade: 'All',
+    gender: 'All',
+    search: '',
+    columns: 5,
+    horizontalSpacing: 4,
+    verticalSpacing: 6,
+    margin: 10,
+    cornerRadius: 6,
+    photoBorder: 0.5,
+    detailsBorder: 0,
+    nameFontSize: 4,
+    detailsFontSize: 4,
+    fontFamily: 'Inter, sans-serif',
+    textAlign: 'center',
+    dpi: 300,
+    jpegQuality: 0.95,
+    pageTitle: '',
+    backgroundColor: '#ffffff',
+    showLabels: false,
     details: {
       photo: true,
       name: true,
@@ -264,7 +287,9 @@ function App() {
       category: false,
       type: false,
       currentLevel: true,
-      result: true
+      position: true,
+      grade: true,
+      marks: false
     }
   });
 
@@ -964,12 +989,17 @@ function App() {
       const item = itemsById[p.itemId];
       if (!student || !item) return;
       if (collageFilter.category !== 'All' && item.category !== collageFilter.category) return;
+      if (collageFilter.item !== 'All' && item.name !== collageFilter.item) return;
       if (collageFilter.className !== 'All' && student.className !== collageFilter.className) return;
       if (collageFilter.division !== 'All' && student.division !== collageFilter.division) return;
+      if (collageFilter.gender !== 'All' && student.gender !== collageFilter.gender) return;
+      if (collageFilter.search && !`${student.name} ${student.className} ${student.admissionNo}`.toLowerCase().includes(collageFilter.search.toLowerCase())) return;
       const levels = levelFilter === 'Entire list' ? Object.keys(p.results || {}).concat(normalizeLevel(p.currentLevel)) : [levelFilter];
       [...new Set(levels)].forEach((level) => {
         const result = p.results?.[level] || {};
         if (levelFilter !== 'Entire list' && levelRank(p.currentLevel, configuredLevels) < levelRank(level, configuredLevels)) return;
+        if (collageFilter.position !== 'All' && String(result.position || '') !== collageFilter.position) return;
+        if (collageFilter.grade !== 'All' && String(result.grade || '') !== collageFilter.grade) return;
         includedStudents.add(student.id);
         rows.push({ student, item, level, result });
       });
@@ -977,28 +1007,73 @@ function App() {
     db.students.forEach((student) => {
       if (includedStudents.has(student.id)) return;
       if (collageFilter.category !== 'All') return;
+      if (collageFilter.item !== 'All' || collageFilter.position !== 'All' || collageFilter.grade !== 'All') return;
       if (collageFilter.className !== 'All' && student.className !== collageFilter.className) return;
       if (collageFilter.division !== 'All' && student.division !== collageFilter.division) return;
+      if (collageFilter.gender !== 'All' && student.gender !== collageFilter.gender) return;
+      if (collageFilter.search && !`${student.name} ${student.className} ${student.admissionNo}`.toLowerCase().includes(collageFilter.search.toLowerCase())) return;
       if (levelFilter !== 'Entire list' && levelFilter !== '') return;
       rows.push({ student, item: null, level: '', result: {} });
     });
-    return rows.sort((a, b) => compareResult(a.result, b.result) || a.student.name.localeCompare(b.student.name));
+    const ordered = rows.sort((a, b) => compareResult(a.result, b.result) || a.student.name.localeCompare(b.student.name));
+    const seenStudents = new Set();
+    return ordered.filter((entry) => {
+      if (seenStudents.has(entry.student.id)) return false;
+      seenStudents.add(entry.student.id);
+      return true;
+    });
   }, [db, studentsById, itemsById, collageFilter]);
 
-  const downloadCollageImage = async () => {
+  const renderCollageCanvas = async () => {
     const node = document.querySelector('.collage-sheet');
-    if (!node) return;
-    const canvas = await html2canvas(node, { backgroundColor: '#ffffff', scale: 2, useCORS: true });
+    if (!node) return null;
+    return html2canvas(node, {
+      backgroundColor: collageFilter.backgroundColor || '#ffffff',
+      scale: Math.max(1, Math.min(4, Number(collageFilter.dpi || 192) / 96)),
+      useCORS: true
+    });
+  };
+
+  const downloadCanvasBlob = (blob, filename) => {
+    if (!blob) return;
     const link = document.createElement('a');
-    link.download = 'student-collage.png';
-    link.href = canvas.toDataURL('image/png');
+    const url = URL.createObjectURL(blob);
+    link.download = filename;
+    link.href = url;
     link.click();
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
+  };
+
+  const downloadCollageImage = async (format = 'png') => {
+    const canvas = await renderCollageCanvas();
+    if (!canvas) return;
+    const mime = format === 'jpeg' ? 'image/jpeg' : 'image/png';
+    const extension = format === 'jpeg' ? 'jpg' : 'png';
+    const blob = await new Promise((resolve) => canvas.toBlob(resolve, mime, Number(collageFilter.jpegQuality || 0.95)));
+    downloadCanvasBlob(blob, `student-collage.${extension}`);
+  };
+
+  const downloadCollageSections = async () => {
+    const canvas = await renderCollageCanvas();
+    if (!canvas) return;
+    const zip = new JSZip();
+    const sectionHeight = 7000;
+    const total = Math.ceil(canvas.height / sectionHeight);
+    for (let index = 0; index < total; index += 1) {
+      const height = Math.min(sectionHeight, canvas.height - index * sectionHeight);
+      const section = document.createElement('canvas');
+      section.width = canvas.width;
+      section.height = height;
+      section.getContext('2d').drawImage(canvas, 0, index * sectionHeight, canvas.width, height, 0, 0, canvas.width, height);
+      const blob = await new Promise((resolve) => section.toBlob(resolve, 'image/jpeg', Number(collageFilter.jpegQuality || 0.95)));
+      zip.file(`collage-section-${index + 1}.jpg`, blob);
+    }
+    downloadCanvasBlob(await zip.generateAsync({ type: 'blob' }), 'student-collage-sections.zip');
   };
 
   const downloadCollagePdf = async () => {
-    const node = document.querySelector('.collage-sheet');
-    if (!node) return;
-    const canvas = await html2canvas(node, { backgroundColor: '#ffffff', scale: 2, useCORS: true });
+    const canvas = await renderCollageCanvas();
+    if (!canvas) return;
     const pdf = new jsPDF('p', 'mm', 'a4');
     const width = 210;
     const height = (canvas.height * width) / canvas.width;
@@ -1140,6 +1215,7 @@ function App() {
             entries={collageEntries}
             downloadCollageImage={downloadCollageImage}
             downloadCollagePdf={downloadCollagePdf}
+            downloadCollageSections={downloadCollageSections}
           />
         )}
 
@@ -1638,11 +1714,63 @@ function GracePage({ notifications }) {
 }
 
 function CollagePage(props) {
+  const [selectedKeys, setSelectedKeys] = useState([]);
+  const keyFor = (entry) => `${entry.student.id}|${entry.item?.id || 'student'}|${entry.level}`;
+  const selectedEntries = selectedKeys.map((key) => props.entries.find((entry) => keyFor(entry) === key)).filter(Boolean);
+  const toggle = (entry) => {
+    const key = keyFor(entry);
+    setSelectedKeys((current) => current.includes(key) ? current.filter((value) => value !== key) : [...current, key]);
+  };
+  const sortSelected = (field) => {
+    setSelectedKeys((current) => [...current].sort((a, b) => {
+      const left = props.entries.find((entry) => keyFor(entry) === a);
+      const right = props.entries.find((entry) => keyFor(entry) === b);
+      if (field === 'position') return Number(left?.result?.position || 999) - Number(right?.result?.position || 999);
+      const leftValue = field === 'item' ? left?.item?.name : left?.student?.[field];
+      const rightValue = field === 'item' ? right?.item?.name : right?.student?.[field];
+      return String(leftValue || '').localeCompare(String(rightValue || ''), undefined, { numeric: true });
+    }));
+  };
+  const randomize = () => setSelectedKeys((current) => {
+    const shuffled = [...current];
+    for (let index = shuffled.length - 1; index > 0; index -= 1) {
+      const target = Math.floor(Math.random() * (index + 1));
+      [shuffled[index], shuffled[target]] = [shuffled[target], shuffled[index]];
+    }
+    return shuffled;
+  });
   return (
-    <section className="panel">
-      <CollageControls {...props} />
-      <div className="collage-workspace">
-        <CollageSheet entries={props.entries} columns={props.collageFilter.columns} details={props.collageFilter.details} />
+    <section className="collage-page">
+      <div className="collage-page-head">
+        <div><strong>{props.entries.length} matching students · {selectedEntries.length} selected</strong></div>
+        <div className="collage-export-actions">
+          <button className="primary" disabled={!selectedEntries.length} onClick={() => props.downloadCollageImage('jpeg')}><Download size={16} /> Export JPEG</button>
+          <button disabled={!selectedEntries.length} onClick={() => props.downloadCollageImage('png')}><FileImage size={16} /> PNG</button>
+          <button disabled={!selectedEntries.length} onClick={props.downloadCollagePdf}><FileText size={16} /> PDF</button>
+          <button disabled={!selectedEntries.length} onClick={props.downloadCollageSections}><Images size={16} /> Sections ZIP</button>
+        </div>
+      </div>
+      <div className="collage-layout">
+        <div className="collage-main-column">
+          <CollageControls {...props} selectedKeys={selectedKeys} setSelectedKeys={setSelectedKeys} keyFor={keyFor} sortSelected={sortSelected} randomize={randomize} />
+          {selectedEntries.length > 0 && (
+            <section className="collage-selection-strip">
+              <strong>Selected Students ({selectedEntries.length})</strong>
+              <div>{selectedEntries.map((entry) => <button key={keyFor(entry)} onClick={() => toggle(entry)}>{entry.student.name}<X size={13} /></button>)}</div>
+            </section>
+          )}
+          <section className="collage-picker-panel">
+            <strong>Filtered Students ({props.entries.length})</strong>
+            <div className="collage-picker-grid">
+              {props.entries.map((entry) => {
+                const selected = selectedKeys.includes(keyFor(entry));
+                return <button className={selected ? 'selected' : ''} key={keyFor(entry)} onClick={() => toggle(entry)}><img src={entry.student.photo || blankPhoto} alt="" /><span>{entry.student.name}</span><small>{entry.item?.name || classDivision(entry.student)}</small></button>;
+              })}
+            </div>
+            {!props.entries.length && <div className="empty">No matching students. Adjust filters above.</div>}
+          </section>
+          <CollageSheet entries={selectedEntries} collageFilter={props.collageFilter} />
+        </div>
         <CollageDetailsPanel collageFilter={props.collageFilter} setCollageFilter={props.setCollageFilter} />
       </div>
     </section>
@@ -2072,15 +2200,20 @@ function ResetConfirmModal({ resetAll, close }) {
   );
 }
 
-function CollageControls({ db, levels, collageFilter, setCollageFilter, downloadCollageImage, downloadCollagePdf }) {
+function CollageControls({ db, levels, collageFilter, setCollageFilter, entries, selectedKeys, setSelectedKeys, keyFor, sortSelected, randomize }) {
   const classes = [...new Set(db.students.map((s) => s.className).filter(Boolean))].sort();
   const divisions = [...new Set(db.students
     .filter((s) => collageFilter.className === 'All' || s.className === collageFilter.className)
     .map((s) => s.division)
     .filter(Boolean))]
     .sort();
+  const items = [...new Set(db.items.map((item) => item.name).filter(Boolean))].sort();
+  const positions = [...new Set(db.participations.flatMap((participation) => Object.values(participation.results || {}).map((result) => String(result.position || '')).filter(Boolean)))].sort((a, b) => Number(a) - Number(b));
+  const grades = [...new Set(db.participations.flatMap((participation) => Object.values(participation.results || {}).map((result) => String(result.grade || '')).filter(Boolean)))].sort();
   return (
-    <div className="collage-controls">
+    <section className="collage-controls-card">
+      <div className="collage-filter-grid">
+      <label className="collage-search"><Search size={16} /><input value={collageFilter.search} onChange={(e) => setCollageFilter({ ...collageFilter, search: e.target.value })} placeholder="Search name..." /></label>
       <select value={collageFilter.level} onChange={(e) => setCollageFilter({ ...collageFilter, level: e.target.value })}>
         <option>Entire list</option>
         {levels.map((l) => <option key={l || '__blank__'} value={l}>{formatLevel(l)}</option>)}
@@ -2094,19 +2227,33 @@ function CollageControls({ db, levels, collageFilter, setCollageFilter, download
         {classes.map((c) => <option key={c}>{c}</option>)}
       </select>
       <select value={collageFilter.division} onChange={(e) => setCollageFilter({ ...collageFilter, division: e.target.value })}>
-        <option>All</option>
+        <option value="All">All divisions</option>
         {divisions.map((d) => <option key={d}>{d}</option>)}
       </select>
-      <select value={collageFilter.columns} onChange={(e) => setCollageFilter({ ...collageFilter, columns: Number(e.target.value) })}>
-        <option value="1">1 column</option>
-        <option value="2">2 columns</option>
-        <option value="3">3 columns</option>
-        <option value="4">4 columns</option>
-        <option value="5">5 columns</option>
+      <select value={collageFilter.item} onChange={(e) => setCollageFilter({ ...collageFilter, item: e.target.value })}>
+        <option value="All">All items</option>{items.map((item) => <option key={item}>{item}</option>)}
       </select>
-      <button onClick={downloadCollageImage}><FileImage size={16} /> Download Image</button>
-      <button onClick={downloadCollagePdf}><FileText size={16} /> Download PDF</button>
-    </div>
+      <select value={collageFilter.position} onChange={(e) => setCollageFilter({ ...collageFilter, position: e.target.value })}>
+        <option value="All">All positions</option>{positions.map((position) => <option key={position}>{position}</option>)}
+      </select>
+      <select value={collageFilter.grade} onChange={(e) => setCollageFilter({ ...collageFilter, grade: e.target.value })}>
+        <option value="All">All grades</option>{grades.map((grade) => <option key={grade}>{grade}</option>)}
+      </select>
+      <select value={collageFilter.gender} onChange={(e) => setCollageFilter({ ...collageFilter, gender: e.target.value })}>
+        <option value="All">All genders</option><option>Female</option><option>Male</option><option>Other</option>
+      </select>
+      </div>
+      <div className="collage-selection-actions">
+        <button onClick={() => setSelectedKeys(entries.map(keyFor))}>Select all filtered</button>
+        <button className="ghost" disabled={!selectedKeys.length} onClick={() => setSelectedKeys([])}>Clear selection</button>
+        <span>Sort:</span>
+        <button className="ghost" onClick={() => sortSelected('name')}>Name</button>
+        <button className="ghost" onClick={() => sortSelected('className')}>Class</button>
+        <button className="ghost" onClick={() => sortSelected('admissionNo')}>Admission</button>
+        <button className="ghost" onClick={() => sortSelected('position')}>Position</button>
+        <button className="ghost" onClick={randomize}><Shuffle size={13} /> Random</button>
+      </div>
+    </section>
   );
 }
 
@@ -2129,40 +2276,68 @@ function CollageDetailsPanel({ collageFilter, setCollageFilter }) {
     ['category', 'Category'],
     ['type', 'Type'],
     ['currentLevel', 'Current level'],
-    ['result', 'Result']
+    ['position', 'Position'],
+    ['grade', 'Grade'],
+    ['marks', 'Marks']
   ];
+  const update = (key, value) => setCollageFilter({ ...collageFilter, [key]: value });
   return (
     <aside className="collage-details-panel">
-      <h2>Details in Collage</h2>
-      {options.map(([key, label]) => (
+      <h2>Collage Settings</h2>
+      <label className="range-setting"><span>Columns: {collageFilter.columns}</span><input type="range" min="1" max="12" value={collageFilter.columns} onChange={(e) => update('columns', Number(e.target.value))} /></label>
+      <div className="collage-setting-grid">
+        <label>H spacing (mm)<input type="number" min="0" value={collageFilter.horizontalSpacing} onChange={(e) => update('horizontalSpacing', Number(e.target.value))} /></label>
+        <label>V spacing (mm)<input type="number" min="0" value={collageFilter.verticalSpacing} onChange={(e) => update('verticalSpacing', Number(e.target.value))} /></label>
+        <label>Margin (mm)<input type="number" min="0" value={collageFilter.margin} onChange={(e) => update('margin', Number(e.target.value))} /></label>
+        <label>Corner radius<input type="number" min="0" value={collageFilter.cornerRadius} onChange={(e) => update('cornerRadius', Number(e.target.value))} /></label>
+        <label>Photo border<input type="number" min="0" step="0.5" value={collageFilter.photoBorder} onChange={(e) => update('photoBorder', Number(e.target.value))} /></label>
+        <label>Details border<input type="number" min="0" step="0.5" value={collageFilter.detailsBorder} onChange={(e) => update('detailsBorder', Number(e.target.value))} /></label>
+        <label>Name font<input type="number" min="2" value={collageFilter.nameFontSize} onChange={(e) => update('nameFontSize', Number(e.target.value))} /></label>
+        <label>Details font<input type="number" min="2" value={collageFilter.detailsFontSize} onChange={(e) => update('detailsFontSize', Number(e.target.value))} /></label>
+      </div>
+      <label>Font family<select value={collageFilter.fontFamily} onChange={(e) => update('fontFamily', e.target.value)}><option value="Inter, sans-serif">Inter (Sans)</option><option value="Georgia, serif">Georgia (Serif)</option><option value="Arial, sans-serif">Arial</option><option value="'Courier New', monospace">Courier</option></select></label>
+      <label>Text alignment<select value={collageFilter.textAlign} onChange={(e) => update('textAlign', e.target.value)}><option value="left">Left</option><option value="center">Center</option><option value="right">Right</option></select></label>
+      <div className="collage-setting-grid">
+        <label>DPI<select value={collageFilter.dpi} onChange={(e) => update('dpi', Number(e.target.value))}><option value="96">96 (screen)</option><option value="150">150</option><option value="300">300 (print)</option></select></label>
+        <label>JPEG quality<select value={collageFilter.jpegQuality} onChange={(e) => update('jpegQuality', Number(e.target.value))}><option value="0.8">0.80</option><option value="0.9">0.90</option><option value="0.95">0.95 (default)</option><option value="1">1.00</option></select></label>
+      </div>
+      <label>Page title<input value={collageFilter.pageTitle} onChange={(e) => update('pageTitle', e.target.value)} placeholder="Optional" /></label>
+      <label>Background colour<input type="color" value={collageFilter.backgroundColor} onChange={(e) => update('backgroundColor', e.target.value)} /></label>
+      <h3>Details in Collage</h3>
+      <label className="check-row"><input type="checkbox" checked={collageFilter.showLabels} onChange={(e) => update('showLabels', e.target.checked)} /><span>Show detail labels</span></label>
+      <div className="collage-detail-options">{options.map(([key, label]) => (
         <label className="check-row" key={key}>
           <input type="checkbox" checked={Boolean(details[key])} onChange={() => setDetail(key)} />
           <span>{label}</span>
         </label>
-      ))}
+      ))}</div>
     </aside>
   );
 }
 
-function CollageSheet({ entries, columns = 3, details = {} }) {
+function CollageSheet({ entries, collageFilter }) {
+  const details = collageFilter.details || {};
+  const label = (name, value) => collageFilter.showLabels ? `${name}: ${value}` : value;
   return (
-    <div className="collage-sheet" style={{ '--collage-columns': columns }}>
+    <div className="collage-sheet" style={{ '--collage-columns': collageFilter.columns, '--collage-h-gap': `${collageFilter.horizontalSpacing * 2}px`, '--collage-v-gap': `${collageFilter.verticalSpacing * 2}px`, '--collage-margin': `${collageFilter.margin * 2}px`, '--collage-radius': `${collageFilter.cornerRadius}px`, '--photo-border': `${collageFilter.photoBorder}px`, '--details-border': `${collageFilter.detailsBorder}px`, '--name-size': `${Math.max(10, collageFilter.nameFontSize * 3)}px`, '--detail-size': `${Math.max(9, collageFilter.detailsFontSize * 3)}px`, fontFamily: collageFilter.fontFamily, textAlign: collageFilter.textAlign, backgroundColor: collageFilter.backgroundColor }}>
+      {collageFilter.pageTitle && <h2 className="collage-title">{collageFilter.pageTitle}</h2>}
       {entries.map(({ student, item, level, result }, index) => {
-        const resultText = [formatPosition(result.position), formatGrade(result.grade)].filter(Boolean).join(' | ');
         return (
           <article className="collage-card" key={`${student.id}-${item?.id || 'student'}-${level}-${index}`}>
             {details.photo && <img src={student.photo || blankPhoto} alt="" />}
             <div>
               {details.name && <strong>{student.name}</strong>}
-              {details.classDivision && classDivision(student) && <span>{classDivision(student)}</span>}
-              {details.admissionNo && student.admissionNo && <span>Adm No: {student.admissionNo}</span>}
+              {details.classDivision && classDivision(student) && <span>{label('Class', classDivision(student))}</span>}
+              {details.admissionNo && student.admissionNo && <span>{label('Admission', student.admissionNo)}</span>}
               {details.gender && student.gender && <span>{student.gender}</span>}
               {details.schoolName && student.schoolName && <span>{student.schoolName}</span>}
               {details.item && item?.name && <span>{item.name}</span>}
-              {details.category && item?.category && <span>{item.category}</span>}
+              {details.category && item?.category && <span>{label('Category', item.category)}</span>}
               {details.type && item?.type && <span>{item.type}</span>}
-              {details.currentLevel && <span>{formatLevel(level)}</span>}
-              {details.result && resultText && <b>{resultText}</b>}
+              {details.currentLevel && <span>{label('Level', formatLevel(level))}</span>}
+              {details.position && result.position && <b>{label('Position', formatPosition(result.position))}</b>}
+              {details.grade && result.grade && <b>{label('Grade', formatGrade(result.grade))}</b>}
+              {details.marks && result.graceMarks && <span>{label('Marks', result.graceMarks)}</span>}
             </div>
           </article>
         );

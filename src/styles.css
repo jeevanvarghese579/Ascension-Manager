@@ -1165,6 +1165,241 @@ th {
   line-height: 1.35;
 }
 
+.collage-page {
+  display: grid;
+  gap: 16px;
+}
+
+.collage-page-head,
+.collage-export-actions,
+.collage-selection-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.collage-page-head {
+  justify-content: space-between;
+}
+
+.collage-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 300px;
+  gap: 18px;
+  align-items: start;
+}
+
+.collage-main-column {
+  display: grid;
+  gap: 14px;
+  min-width: 0;
+}
+
+.collage-controls-card,
+.collage-picker-panel,
+.collage-selection-strip {
+  background: #fff;
+  border: 1px solid #dce5ef;
+  border-radius: 10px;
+  padding: 13px;
+}
+
+.collage-filter-grid {
+  display: flex;
+  gap: 7px;
+  flex-wrap: wrap;
+}
+
+.collage-filter-grid select {
+  width: auto;
+  min-width: 120px;
+}
+
+.collage-search {
+  position: relative;
+  flex: 1 1 150px;
+}
+
+.collage-search svg {
+  position: absolute;
+  left: 10px;
+  top: 50%;
+  transform: translateY(-50%);
+  color: #7b8a9d;
+}
+
+.collage-search input {
+  width: 100%;
+  padding-left: 32px;
+}
+
+.collage-selection-actions {
+  margin-top: 10px;
+  font-size: 0.78rem;
+}
+
+.collage-selection-actions button {
+  min-height: 30px;
+  padding: 5px 9px;
+  font-size: 0.76rem;
+}
+
+.collage-selection-strip > div {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+  margin-top: 9px;
+}
+
+.collage-selection-strip button {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 9px;
+  font-size: 0.78rem;
+  background: #f4f7fb;
+}
+
+.collage-picker-panel > strong {
+  display: block;
+  margin-bottom: 11px;
+}
+
+.collage-picker-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(105px, 1fr));
+  gap: 10px;
+  max-height: 390px;
+  overflow: auto;
+}
+
+.collage-picker-grid button {
+  padding: 5px;
+  display: grid;
+  gap: 4px;
+  text-align: left;
+  overflow: hidden;
+}
+
+.collage-picker-grid button.selected {
+  border-color: #176fd1;
+  box-shadow: 0 0 0 2px rgba(23, 111, 209, 0.18);
+  background: #edf5ff;
+}
+
+.collage-picker-grid img {
+  width: 100%;
+  aspect-ratio: 3 / 4;
+  border-radius: 5px;
+  object-fit: cover;
+}
+
+.collage-picker-grid span,
+.collage-picker-grid small {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.collage-picker-grid small {
+  color: #64748b;
+}
+
+.collage-details-panel {
+  background: #fff;
+}
+
+.collage-details-panel > label {
+  display: grid;
+  gap: 5px;
+  margin: 10px 0;
+  font-size: 0.8rem;
+}
+
+.collage-details-panel h3 {
+  margin: 16px 0 6px;
+  font-size: 0.9rem;
+}
+
+.range-setting input {
+  width: 100%;
+}
+
+.collage-setting-grid,
+.collage-detail-options {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 7px;
+}
+
+.collage-setting-grid label {
+  display: grid;
+  gap: 4px;
+  font-size: 0.76rem;
+}
+
+.collage-details-panel input,
+.collage-details-panel select {
+  min-height: 32px;
+}
+
+.collage-detail-options .check-row {
+  min-height: 28px;
+  font-size: 0.78rem;
+}
+
+.collage-sheet {
+  padding: var(--collage-margin);
+  column-gap: var(--collage-h-gap);
+  row-gap: var(--collage-v-gap);
+  max-width: none;
+  width: 100%;
+}
+
+.collage-title {
+  grid-column: 1 / -1;
+  margin: 0 0 6px;
+  text-align: inherit;
+}
+
+.collage-card {
+  min-height: 0;
+  border: 0;
+  border-radius: var(--collage-radius);
+  padding: 0;
+  gap: 0;
+  text-align: inherit;
+}
+
+.collage-card img {
+  aspect-ratio: 3 / 4;
+  border: var(--photo-border) solid #111;
+  border-radius: var(--collage-radius);
+}
+
+.collage-card > div {
+  padding: 5px;
+  border: var(--details-border) solid #111;
+  text-align: inherit;
+}
+
+.collage-card span,
+.collage-card b {
+  font-size: var(--detail-size);
+  text-align: inherit;
+}
+
+.collage-card strong {
+  font-size: var(--name-size);
+  text-align: inherit;
+}
+
+@media (max-width: 1050px) {
+  .collage-layout { grid-template-columns: 1fr; }
+  .collage-details-panel { position: static; }
+}
+
 .collage-card b {
   color: #1769c2;
   margin-top: 6px;
