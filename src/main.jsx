@@ -1349,22 +1349,19 @@ function AccessGate({
                 </span>
                 <Cloud size={22} />
               </button>
-              {!user && (
-                <>
-                  <div className="access-divider"><span>or</span></div>
-                  <form className="email-auth-form" onSubmit={authFormMode === 'sign-in' ? signInWithPassword : signUpWithPassword}>
-                    <div className="auth-form-tabs">
-                      <button type="button" className={authFormMode === 'sign-in' ? 'active' : ''} onClick={() => setAuthFormMode('sign-in')}>Sign In</button>
-                      <button type="button" className={authFormMode === 'sign-up' ? 'active' : ''} onClick={() => setAuthFormMode('sign-up')}>Create Account</button>
-                    </div>
-                    {authFormMode === 'sign-up' && <p>Create your account. Administrator approval is required before you can use this application.</p>}
-                    <label>Email<input type="email" value={authEmail} onChange={(event) => setAuthEmail(event.target.value)} autoComplete="email" required /></label>
-                    <label>Password<input type="password" value={authPassword} onChange={(event) => setAuthPassword(event.target.value)} autoComplete={authFormMode === 'sign-in' ? 'current-password' : 'new-password'} minLength="6" required /></label>
-                    <button className="primary" type="submit" disabled={busy}>{authFormMode === 'sign-in' ? 'Sign In' : 'Create Account'}</button>
-                    {authFormMode === 'sign-in' && <button className="link-button forgot-password" type="button" onClick={resetPassword} disabled={busy}>Forgot Password?</button>}
-                  </form>
-                </>
-              )}
+              <div className="access-divider"><span>or use email</span></div>
+              <form className="email-auth-form" onSubmit={authFormMode === 'sign-in' ? signInWithPassword : signUpWithPassword}>
+                <div className="auth-form-tabs">
+                  <button type="button" className={authFormMode === 'sign-in' ? 'active' : ''} onClick={() => setAuthFormMode('sign-in')}>Email Sign In</button>
+                  <button type="button" className={authFormMode === 'sign-up' ? 'active' : ''} onClick={() => setAuthFormMode('sign-up')}>Create Account</button>
+                </div>
+                {user && authFormMode === 'sign-in' && <p>Sign in with a different email/password account.</p>}
+                {authFormMode === 'sign-up' && <p>Create your account. Administrator approval is required before you can use this application.</p>}
+                <label>Email<input type="email" value={authEmail} onChange={(event) => setAuthEmail(event.target.value)} autoComplete="email" required /></label>
+                <label>Password<input type="password" value={authPassword} onChange={(event) => setAuthPassword(event.target.value)} autoComplete={authFormMode === 'sign-in' ? 'current-password' : 'new-password'} minLength="6" required /></label>
+                <button className="primary" type="submit" disabled={busy}>{authFormMode === 'sign-in' ? 'Sign In with Email' : 'Create Account'}</button>
+                {authFormMode === 'sign-in' && <button className="link-button forgot-password" type="button" onClick={resetPassword} disabled={busy}>Forgot Password?</button>}
+              </form>
             </>
           )}
           <button className="access-option" onClick={enterOfflineMode} disabled={busy || requestBusy}>
