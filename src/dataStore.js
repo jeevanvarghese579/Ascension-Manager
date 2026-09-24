@@ -1,5 +1,4 @@
 import {
-  collection,
   doc,
   getDoc,
   getDocs,
@@ -8,11 +7,11 @@ import {
   writeBatch
 } from 'firebase/firestore';
 import { db as firestore } from './firebase';
+import { userCollection, userPath, userRoot } from './firebasePaths';
 
 const LOCAL_DATABASE = 'ascension-manager-local';
 const LOCAL_STORE = 'app-data';
 const LOCAL_RECORD = 'database';
-const CLOUD_ROOT = 'ascensionManagerUsers';
 const CLOUD_COLLECTIONS = ['students', 'items', 'participations', 'groupMembers', 'uploadedPhotos'];
 
 function openLocalDatabase() {
@@ -64,9 +63,6 @@ export function saveLocalData(value) {
   return localRequest('readwrite', (store) => store.put(value, LOCAL_RECORD));
 }
 
-const userRoot = (userId) => doc(firestore, CLOUD_ROOT, userId);
-const userCollection = (userId, name) => collection(firestore, CLOUD_ROOT, userId, name);
-
 function logFirestoreOperation(operation, path, details = {}) {
   console.info('[Ascension Firestore]', {
     operation,
@@ -77,7 +73,7 @@ function logFirestoreOperation(operation, path, details = {}) {
 }
 
 export async function loadCloudData(userId, createDefault, normalize) {
-  const rootPath = `${CLOUD_ROOT}/${userId}`;
+  const rootPath = userPath(userId);
   logFirestoreOperation('get', rootPath, { uid: userId });
   let rootSnapshot;
   try {
@@ -101,7 +97,7 @@ export async function loadCloudData(userId, createDefault, normalize) {
   const root = rootSnapshot.data();
   const entries = await Promise.all(
     CLOUD_COLLECTIONS.map(async (name) => {
-      logFirestoreOperation('list', `${CLOUD_ROOT}/${userId}/${name}`, { uid: userId });
+      logFirestoreOperation('list', userPath(userId, name), { uid: userId });
       const snapshot = await getDocs(userCollection(userId, name));
       return [name, snapshot.docs.map((entry) => ({ ...entry.data(), id: entry.id }))];
     })
@@ -131,7 +127,7 @@ function changedRecords(previous = [], next = []) {
 }
 
 export async function saveCloudData(userId, value, previous) {
-  logFirestoreOperation('set', `${CLOUD_ROOT}/${userId}`, { uid: userId });
+  logFirestoreOperation('set', userPath(userId), { uid: userId });
   await setDoc(
     userRoot(userId),
     {
@@ -147,7 +143,7 @@ export async function saveCloudData(userId, value, previous) {
   );
 
   for (let index = 0; index < operations.length; index += 400) {
-    logFirestoreOperation('batch-write', `${CLOUD_ROOT}/${userId}/{collection}/{document}`, {
+    logFirestoreOperation('batch-write', userPath(userId, '{collection}/{document}'), {
       uid: userId,
       operationCount: Math.min(400, operations.length - index)
     });

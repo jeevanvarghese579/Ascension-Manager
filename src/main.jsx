@@ -50,6 +50,7 @@ import {
 import { app, auth, googleProvider } from './firebase';
 import { APP_DISPLAY_NAME, checkCurrentUserAccess, requestCurrentUserAccess } from './authorization';
 import { loadCloudData, loadLocalData, saveCloudData, saveLocalData } from './dataStore';
+import { APP_KEY } from './firebasePaths';
 import './styles.css';
 
 const APP_NAME = 'School Programmes Ascention Manager';
@@ -427,7 +428,7 @@ function App() {
         email: user.email?.trim().toLowerCase() || null,
         projectId: app.options.projectId,
         appId: app.options.appId,
-        path: `ascensionManagerUsers/${access.uid}`,
+        path: `apps/ascensionManager/users/${access.uid}`,
         resolvedPermission: access.resolvedPermission,
         canonicalAccessDocument: access.canonicalAccessDocument
       });
@@ -884,6 +885,7 @@ function App() {
 
   const exportBackup = () => {
     const backup = {
+      appKey: APP_KEY,
       appName: APP_NAME,
       appVersion: APP_VERSION,
       exportedAt: new Date().toISOString(),
@@ -898,6 +900,9 @@ function App() {
     if (!file) return;
     try {
       const parsed = JSON.parse(await file.text());
+      if (parsed.appKey !== undefined && parsed.appKey !== APP_KEY) {
+        throw new Error('Backup belongs to a different application.');
+      }
       const restored = normalizeDb(parsed.data || parsed);
       save(restored);
       notify('Universal backup restored.');
