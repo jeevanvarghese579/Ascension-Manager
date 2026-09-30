@@ -12,7 +12,8 @@ import { db as firestore } from './firebase';
 const LOCAL_DATABASE = 'ascension-manager-local';
 const LOCAL_STORE = 'app-data';
 const LOCAL_RECORD = 'database';
-const CLOUD_ROOT = 'ascensionManagerUsers';
+const APP_KEY = 'ascensionManager';
+const CLOUD_ROOT = `apps/${APP_KEY}/users`;
 const CLOUD_COLLECTIONS = ['students', 'items', 'participations', 'groupMembers', 'uploadedPhotos'];
 
 function openLocalDatabase() {

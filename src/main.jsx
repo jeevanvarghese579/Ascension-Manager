@@ -427,7 +427,7 @@ function App() {
         email: user.email?.trim().toLowerCase() || null,
         projectId: app.options.projectId,
         appId: app.options.appId,
-        path: `ascensionManagerUsers/${access.uid}`,
+        path: `apps/ascensionManager/users/${access.uid}`,
         resolvedPermission: access.resolvedPermission,
         canonicalAccessDocument: access.canonicalAccessDocument
       });
