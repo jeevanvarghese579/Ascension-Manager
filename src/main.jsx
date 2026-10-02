@@ -606,6 +606,7 @@ function App() {
 
   const submitAccessRequest = async () => {
     if (!currentUser || requestBusy) return;
+    if (!window.confirm('Send an access request to the administrator?')) return;
     setRequestBusy(true);
     setAccessError('');
     setRequestMessage('');
@@ -1333,6 +1334,7 @@ function AccessGate({
               <button className="primary access-request-button" onClick={submitAccessRequest} disabled={requestBusy || requestPending || requestRejected}>
                 {requestBusy ? 'Sending request…' : requestPending ? 'Awaiting approval' : requestRejected ? 'Request rejected' : 'Request Access'}
               </button>
+              <a href="https://itsjeevanvarghese.web.app/contact" target="_blank" rel="noopener noreferrer">Contact developer</a>
               {requestMessage && <p className="access-request-message">{requestMessage}</p>}
               <div className="access-request-actions">
                 <button onClick={checkAgain} disabled={busy || requestBusy}>Check Again</button>
