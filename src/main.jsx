@@ -1267,6 +1267,9 @@ function App() {
       {modal?.type === 'groupResult' && (
         <GroupResultModal participations={modal.participations} item={modal.item} db={db} save={save} close={() => setModal(null)} levels={selectableLevels} />
       )}
+      {modal?.type === 'groupDate' && (
+        <GroupDateModal participations={modal.participations} item={modal.item} db={db} save={save} close={() => setModal(null)} />
+      )}
       {modal?.type === 'resetConfirm' && (
         <ResetConfirmModal resetAll={resetAll} close={() => setModal(null)} />
       )}
@@ -1686,7 +1689,7 @@ function ParticipationPage({ rows, db, studentsById, itemsById, query, setQuery,
                 </div>
               </td>
               <td><button className={`level-pill readonly ${allEnded ? 'stopped' : ''}`} onClick={() => setModal({ type: 'groupResult', participations: row.participations, item: row.item })}>{groupLevel(row.participations)}</button></td>
-              <td>{groupDate(row.participations)}</td>
+              <td><button className="date-button" onClick={() => setModal({ type: 'groupDate', participations: row.participations, item: row.item })}>{groupDate(row.participations)}</button></td>
               <td><button className="ghost danger-text" onClick={() => toggleGroupEnd(row.participations)}>End here</button></td>
               <td>Click level to enter result</td>
               <td></td>
@@ -2400,6 +2403,33 @@ function FilterBar({ db, filters, setFilters, query, setQuery, compact, levels }
         </fieldset>
       )}
     </section>
+  );
+}
+
+function GroupDateModal({ participations, item, db, save, close }) {
+  const dates = [...new Set(participations.map((participation) => participation.nextCompetitionDate || ''))];
+  const [nextCompetitionDate, setNextCompetitionDate] = useState(dates.length === 1 ? dates[0] : '');
+  const dateInputRef = useRef(null);
+  const submit = () => {
+    const ids = new Set(participations.map((participation) => participation.id));
+    const dateToSave = dateInputRef.current?.value ?? nextCompetitionDate;
+    save({
+      ...db,
+      participations: db.participations.map((participation) =>
+        ids.has(participation.id) ? { ...participation, nextCompetitionDate: dateToSave } : participation
+      )
+    });
+    close();
+  };
+  return (
+    <Modal title={`Next Competition Date - ${item.name}`} close={close}>
+      <label className="date-field">
+        <span>Date for all {participations.length} group members</span>
+        <input ref={dateInputRef} type="date" value={nextCompetitionDate} onChange={(event) => setNextCompetitionDate(event.target.value)} />
+      </label>
+      {dates.length > 1 && <p className="muted">Group members currently have different dates. Saving will apply this date to everyone.</p>}
+      <ModalActions close={close} submit={submit} label="Save Group Date" />
+    </Modal>
   );
 }
 
