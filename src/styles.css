@@ -1239,7 +1239,8 @@ th {
   font-size: 0.78rem;
 }
 
-.collage-category-filter {
+.collage-category-filter,
+.participation-category-filter {
   display: flex;
   align-items: center;
   gap: 12px;
@@ -1250,16 +1251,22 @@ th {
   border-radius: 8px;
 }
 
-.collage-category-filter legend {
+.collage-category-filter legend,
+.participation-category-filter legend {
   padding: 0 5px;
   color: #526173;
   font-size: 0.78rem;
   font-weight: 700;
 }
 
-.collage-category-filter .check-row {
+.collage-category-filter .check-row,
+.participation-category-filter .check-row {
   min-height: 28px;
   font-size: 0.8rem;
+}
+
+.participation-category-filter {
+  flex: 1 0 100%;
 }
 
 .collage-selection-actions button {

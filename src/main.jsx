@@ -247,7 +247,7 @@ function App() {
   const [page, setPage] = useState('Dashboard');
   const [modal, setModal] = useState(null);
   const [query, setQuery] = useState('');
-  const [filters, setFilters] = useState({ level: 'All', category: 'All', type: 'All', className: 'All', status: 'All' });
+  const [filters, setFilters] = useState({ level: 'All', category: 'All', categories: [], type: 'All', className: 'All', status: 'All' });
   const [expanded, setExpanded] = useState({});
   const [toast, setToast] = useState('');
   const [collageFilter, setCollageFilter] = useState({
@@ -732,6 +732,9 @@ function App() {
 
   const filteredParticipations = useMemo(() => {
     const text = query.trim().toLowerCase();
+    const selectedCategories = filters.categories?.length
+      ? filters.categories
+      : filters.category !== 'All' ? [filters.category] : [];
     return db.participations.filter((p) => {
       const student = studentsById[p.studentId];
       const item = itemsById[p.itemId];
@@ -740,7 +743,7 @@ function App() {
       return (
         (!text || hay.includes(text)) &&
         (filters.level === 'All' || normalizeLevel(p.currentLevel) === filters.level) &&
-        (filters.category === 'All' || item.category === filters.category) &&
+        (!selectedCategories.length || selectedCategories.includes(item.category)) &&
         (filters.type === 'All' || item.type === filters.type) &&
         (filters.className === 'All' || student.className === filters.className) &&
         (filters.status === 'All' || (filters.status === 'Ended' ? p.ended : !p.ended))
@@ -2364,14 +2367,38 @@ function CollageSheet({ entries, collageFilter }) {
 
 function FilterBar({ db, filters, setFilters, query, setQuery, compact, levels }) {
   const classes = [...new Set(db.students.map((s) => s.className).filter(Boolean))].sort();
+  const selectedCategories = filters.categories?.length
+    ? filters.categories
+    : filters.category !== 'All' ? [filters.category] : [];
+  const toggleCategory = (category) => {
+    const categories = selectedCategories.includes(category)
+      ? selectedCategories.filter((value) => value !== category)
+      : [...selectedCategories, category];
+    setFilters({ ...filters, category: 'All', categories });
+  };
   return (
     <section className={`filters ${compact ? 'compact' : ''}`}>
       {!compact && <SearchBox query={query} setQuery={setQuery} placeholder="Search student name, class, item..." />}
       <select value={filters.level} onChange={(e) => setFilters({ ...filters, level: e.target.value })}><option>All</option>{levels.map((l) => <option key={l || '__blank__'} value={l}>{formatLevel(l)}</option>)}</select>
-      <select value={filters.category} onChange={(e) => setFilters({ ...filters, category: e.target.value })}><option>All</option>{db.categories.map((c) => <option key={c}>{c}</option>)}</select>
+      {!compact && <select value={filters.category} onChange={(e) => setFilters({ ...filters, category: e.target.value })}><option>All</option>{db.categories.map((c) => <option key={c}>{c}</option>)}</select>}
       <select value={filters.type} onChange={(e) => setFilters({ ...filters, type: e.target.value })}><option>All</option><option>Individual</option><option>Group</option></select>
       <select value={filters.className} onChange={(e) => setFilters({ ...filters, className: e.target.value })}><option>All</option>{classes.map((c) => <option key={c}>{c}</option>)}</select>
       <select value={filters.status} onChange={(e) => setFilters({ ...filters, status: e.target.value })}><option>All</option><option>Not Ended</option><option>Ended</option></select>
+      {compact && (
+        <fieldset className="participation-category-filter">
+          <legend>Categories to display</legend>
+          <label className="check-row">
+            <input type="checkbox" checked={!selectedCategories.length} onChange={() => setFilters({ ...filters, category: 'All', categories: [] })} />
+            <span>All categories</span>
+          </label>
+          {db.categories.map((category) => (
+            <label className="check-row" key={category}>
+              <input type="checkbox" checked={selectedCategories.includes(category)} onChange={() => toggleCategory(category)} />
+              <span>{category}</span>
+            </label>
+          ))}
+        </fieldset>
+      )}
     </section>
   );
 }
