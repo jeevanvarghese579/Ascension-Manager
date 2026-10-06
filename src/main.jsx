@@ -247,7 +247,7 @@ function App() {
   const [page, setPage] = useState('Dashboard');
   const [modal, setModal] = useState(null);
   const [query, setQuery] = useState('');
-  const [filters, setFilters] = useState({ level: 'All', category: 'All', categories: [], type: 'All', className: 'All', status: 'All' });
+  const [filters, setFilters] = useState({ level: 'All', category: 'All', categories: [], type: 'All', className: 'All', status: 'All', resultStatus: 'All' });
   const [expanded, setExpanded] = useState({});
   const [toast, setToast] = useState('');
   const [collageFilter, setCollageFilter] = useState({
@@ -740,13 +740,15 @@ function App() {
       const item = itemsById[p.itemId];
       if (!student || !item) return false;
       const hay = `${student.name} ${student.admissionNo} ${student.className}${student.division} ${item.name} ${item.category}`.toLowerCase();
+      const resultObtained = hasResult(p.results?.[normalizeLevel(p.currentLevel)]);
       return (
         (!text || hay.includes(text)) &&
         (filters.level === 'All' || normalizeLevel(p.currentLevel) === filters.level) &&
         (!selectedCategories.length || selectedCategories.includes(item.category)) &&
         (filters.type === 'All' || item.type === filters.type) &&
         (filters.className === 'All' || student.className === filters.className) &&
-        (filters.status === 'All' || (filters.status === 'Ended' ? p.ended : !p.ended))
+        (filters.status === 'All' || (filters.status === 'Ended' ? p.ended : !p.ended)) &&
+        (filters.resultStatus === 'All' || (filters.resultStatus === 'Results Obtained' ? resultObtained : !resultObtained))
       );
     });
   }, [db.participations, query, filters, studentsById, itemsById]);
@@ -2394,6 +2396,7 @@ function FilterBar({ db, filters, setFilters, query, setQuery, compact, levels }
       <select value={filters.type} onChange={(e) => setFilters({ ...filters, type: e.target.value })}><option>All</option><option>Individual</option><option>Group</option></select>
       <select value={filters.className} onChange={(e) => setFilters({ ...filters, className: e.target.value })}><option>All</option>{classes.map((c) => <option key={c}>{c}</option>)}</select>
       <select value={filters.status} onChange={(e) => setFilters({ ...filters, status: e.target.value })}><option>All</option><option>Not Ended</option><option>Ended</option></select>
+      {compact && <select value={filters.resultStatus} onChange={(e) => setFilters({ ...filters, resultStatus: e.target.value })}><option value="All">All results</option><option>Results Obtained</option><option>No Results</option></select>}
       {compact && (
         <fieldset className="participation-category-filter">
           <legend>Categories to display</legend>
@@ -2567,8 +2570,12 @@ function filterStudents(students, query) {
 }
 
 function formatResult(result) {
-  if (!result || (!result.position && !result.grade && !result.graceMarks)) return 'No result';
+  if (!hasResult(result)) return 'No result';
   return [formatPosition(result.position), formatGrade(result.grade), result.graceMarks ? `${result.graceMarks} grace` : ''].filter(Boolean).join(' | ');
+}
+
+function hasResult(result) {
+  return Boolean(result && (result.position || result.grade || Number(result.graceMarks)));
 }
 
 function formatCompetitionDate(value) {
