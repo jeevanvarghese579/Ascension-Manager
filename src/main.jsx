@@ -252,7 +252,7 @@ function App() {
   const [toast, setToast] = useState('');
   const [collageFilter, setCollageFilter] = useState({
     level: 'Entire list',
-    category: 'All',
+    categories: [],
     className: 'All',
     division: 'All',
     item: 'All',
@@ -989,7 +989,7 @@ function App() {
       const student = studentsById[p.studentId];
       const item = itemsById[p.itemId];
       if (!student || !item) return;
-      if (collageFilter.category !== 'All' && item.category !== collageFilter.category) return;
+      if (collageFilter.categories?.length && !collageFilter.categories.includes(item.category)) return;
       if (collageFilter.item !== 'All' && item.name !== collageFilter.item) return;
       if (collageFilter.className !== 'All' && student.className !== collageFilter.className) return;
       if (collageFilter.division !== 'All' && student.division !== collageFilter.division) return;
@@ -1007,7 +1007,7 @@ function App() {
     });
     db.students.forEach((student) => {
       if (includedStudents.has(student.id)) return;
-      if (collageFilter.category !== 'All') return;
+      if (collageFilter.categories?.length) return;
       if (collageFilter.item !== 'All' || collageFilter.position !== 'All' || collageFilter.grade !== 'All') return;
       if (collageFilter.className !== 'All' && student.className !== collageFilter.className) return;
       if (collageFilter.division !== 'All' && student.division !== collageFilter.division) return;
@@ -1623,7 +1623,7 @@ function ParticipationPage({ rows, db, studentsById, itemsById, query, setQuery,
         </td>
         <td><button className={`level-pill ${p.ended ? 'stopped' : ''}`} onClick={() => setModal({ type: 'result', participation: p, level: normalizeLevel(p.currentLevel) })}>{formatLevel(p.currentLevel)}</button></td>
         <td><button className="date-button" onClick={() => setModal({ type: 'participation', participation: p })}>{formatCompetitionDate(p.nextCompetitionDate)}</button></td>
-        <td><button className={p.ended ? 'ghost success-text' : 'ghost danger-text'} onClick={() => endHere(p)}>End here</button></td>
+        <td><button className="ghost danger-text" onClick={() => endHere(p)}>End here</button></td>
         <td>{formatResult(result)}</td>
         <td className="actions">
           <button className="icon" title="Edit participation" onClick={() => setModal({ type: 'participation', participation: p })}><Pencil size={16} /></button>
@@ -1642,7 +1642,7 @@ function ParticipationPage({ rows, db, studentsById, itemsById, query, setQuery,
       <FilterBar db={db} filters={filters} setFilters={setFilters} query={query} setQuery={setQuery} compact levels={levels} />
       <PagedTable
         rows={groupedRows}
-        columns={['Student / Group', 'Item', 'Category', 'Increase Level', 'Current Level', 'Next Competition Date', 'End', 'Result', 'Actions']}
+        columns={['Student / Group', 'Item', 'Category', 'Increase Level', 'Currently Participated', 'Next Competition Date', 'End', 'Result', 'Actions']}
         sortValue={(row, column) => {
           const participations = row.kind === 'group' ? row.participations : [row.participation];
           const first = participations[0] || {};
@@ -1684,7 +1684,7 @@ function ParticipationPage({ rows, db, studentsById, itemsById, query, setQuery,
               </td>
               <td><button className={`level-pill readonly ${allEnded ? 'stopped' : ''}`} onClick={() => setModal({ type: 'groupResult', participations: row.participations, item: row.item })}>{groupLevel(row.participations)}</button></td>
               <td>{groupDate(row.participations)}</td>
-              <td><button className={allEnded ? 'ghost success-text' : 'ghost danger-text'} onClick={() => toggleGroupEnd(row.participations)}>End here</button></td>
+              <td><button className="ghost danger-text" onClick={() => toggleGroupEnd(row.participations)}>End here</button></td>
               <td>Click level to enter result</td>
               <td></td>
             </tr>
@@ -2209,6 +2209,13 @@ function CollageControls({ db, levels, collageFilter, setCollageFilter, entries,
   const items = [...new Set(db.items.map((item) => item.name).filter(Boolean))].sort();
   const positions = [...new Set(db.participations.flatMap((participation) => Object.values(participation.results || {}).map((result) => String(result.position || '')).filter(Boolean)))].sort((a, b) => Number(a) - Number(b));
   const grades = [...new Set(db.participations.flatMap((participation) => Object.values(participation.results || {}).map((result) => String(result.grade || '')).filter(Boolean)))].sort();
+  const selectedCategories = collageFilter.categories || [];
+  const toggleCategory = (category) => {
+    const categories = selectedCategories.includes(category)
+      ? selectedCategories.filter((value) => value !== category)
+      : [...selectedCategories, category];
+    setCollageFilter({ ...collageFilter, categories });
+  };
   return (
     <section className="collage-controls-card">
       <div className="collage-filter-grid">
@@ -2216,10 +2223,6 @@ function CollageControls({ db, levels, collageFilter, setCollageFilter, entries,
       <select value={collageFilter.level} onChange={(e) => setCollageFilter({ ...collageFilter, level: e.target.value })}>
         <option>Entire list</option>
         {levels.map((l) => <option key={l || '__blank__'} value={l}>{formatLevel(l)}</option>)}
-      </select>
-      <select value={collageFilter.category} onChange={(e) => setCollageFilter({ ...collageFilter, category: e.target.value })}>
-        <option>All</option>
-        {db.categories.map((c) => <option key={c}>{c}</option>)}
       </select>
       <select value={collageFilter.className} onChange={(e) => setCollageFilter({ ...collageFilter, className: e.target.value, division: 'All' })}>
         <option>All</option>
@@ -2242,6 +2245,19 @@ function CollageControls({ db, levels, collageFilter, setCollageFilter, entries,
         <option value="All">All genders</option><option>Female</option><option>Male</option><option>Other</option>
       </select>
       </div>
+      <fieldset className="collage-category-filter">
+        <legend>Categories to display</legend>
+        <label className="check-row">
+          <input type="checkbox" checked={!selectedCategories.length} onChange={() => setCollageFilter({ ...collageFilter, categories: [] })} />
+          <span>All categories</span>
+        </label>
+        {db.categories.map((category) => (
+          <label className="check-row" key={category}>
+            <input type="checkbox" checked={selectedCategories.includes(category)} onChange={() => toggleCategory(category)} />
+            <span>{category}</span>
+          </label>
+        ))}
+      </fieldset>
       <div className="collage-selection-actions">
         <button onClick={() => setSelectedKeys(entries.map(keyFor))}>Select all filtered</button>
         <button className="ghost" disabled={!selectedKeys.length} onClick={() => setSelectedKeys([])}>Clear selection</button>

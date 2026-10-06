@@ -785,9 +785,9 @@ th {
 }
 
 .level-arrows.ended button {
-  background: #dbf5e7;
-  color: #087443;
-  border-color: #9fe0bd;
+  background: #fee4e2;
+  color: #b42318;
+  border-color: #f6b7b2;
 }
 
 .level-pill {
@@ -806,9 +806,9 @@ th {
 }
 
 .level-pill.stopped {
-  background: #dbf5e7;
-  color: #087443;
-  border-color: #9fe0bd;
+  background: #fee4e2;
+  color: #b42318;
+  border-color: #f6b7b2;
 }
 
 .group-count {
@@ -1237,6 +1237,29 @@ th {
 .collage-selection-actions {
   margin-top: 10px;
   font-size: 0.78rem;
+}
+
+.collage-category-filter {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+  margin: 10px 0 0;
+  padding: 9px 11px;
+  border: 1px solid #dce5ef;
+  border-radius: 8px;
+}
+
+.collage-category-filter legend {
+  padding: 0 5px;
+  color: #526173;
+  font-size: 0.78rem;
+  font-weight: 700;
+}
+
+.collage-category-filter .check-row {
+  min-height: 28px;
+  font-size: 0.8rem;
 }
 
 .collage-selection-actions button {
