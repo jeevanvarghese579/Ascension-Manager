@@ -1595,6 +1595,13 @@ function ParticipationPage({ rows, db, studentsById, itemsById, query, setQuery,
     const dates = [...new Set(participations.map((p) => p.nextCompetitionDate || ''))];
     return dates.length === 1 ? formatCompetitionDate(dates[0]) : 'Multiple dates';
   };
+  const groupResult = (participations) => {
+    const level = normalizeLevel(participations[0]?.currentLevel);
+    const results = [...new Set(participations.map((participation) =>
+      formatResult(participation.results?.[level] || {})
+    ))];
+    return results.length === 1 ? results[0] : 'Mixed results';
+  };
   const groupedRows = useMemo(() => {
     const groups = {};
     const singles = [];
@@ -1663,7 +1670,7 @@ function ParticipationPage({ rows, db, studentsById, itemsById, query, setQuery,
             first.currentLevel,
             first.nextCompetitionDate || '',
             participations.every((p) => p.ended),
-            formatResult(result),
+            row.kind === 'group' ? groupResult(participations) : formatResult(result),
             row.kind === 'group' ? item?.id : first.id
           ][column];
         }}
@@ -1691,7 +1698,7 @@ function ParticipationPage({ rows, db, studentsById, itemsById, query, setQuery,
               <td><button className={`level-pill readonly ${allEnded ? 'stopped' : ''}`} onClick={() => setModal({ type: 'groupResult', participations: row.participations, item: row.item })}>{groupLevel(row.participations)}</button></td>
               <td><button className="date-button" onClick={() => setModal({ type: 'groupDate', participations: row.participations, item: row.item })}>{groupDate(row.participations)}</button></td>
               <td><button className="ghost danger-text" onClick={() => toggleGroupEnd(row.participations)}>End here</button></td>
-              <td>Click level to enter result</td>
+              <td>{groupResult(row.participations)}</td>
               <td></td>
             </tr>
             {open && row.participations.map((p) => renderParticipationRow(p, 'member-row-inline', false))}
@@ -2149,7 +2156,7 @@ function GroupResultModal({ participations, item, db, save, close, levels }) {
       ...db,
       participations: db.participations.map((p) =>
         ids.has(p.id)
-          ? { ...p, results: { ...(p.results || {}), [level]: { ...form, graceMarks: Number(form.graceMarks || 0) } } }
+          ? { ...p, currentLevel: level, results: { ...(p.results || {}), [level]: { ...form, graceMarks: Number(form.graceMarks || 0) } } }
           : p
       )
     });
