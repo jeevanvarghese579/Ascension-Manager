@@ -1637,7 +1637,7 @@ function ParticipationPage({ rows, db, studentsById, itemsById, query, setQuery,
           ) : <span className="muted">Group controlled</span>}
         </td>
         <td><button className={`level-pill ${p.ended ? 'stopped' : ''}`} onClick={() => setModal({ type: 'result', participation: p, level: normalizeLevel(p.currentLevel) })}>{formatLevel(p.currentLevel)}</button></td>
-        <td><button className="date-button" onClick={() => setModal({ type: 'participation', participation: p })}>{formatCompetitionDate(p.nextCompetitionDate)}</button></td>
+        <td><button className={`date-button ${p.ended ? 'stopped' : ''}`} disabled={p.ended} onClick={() => setModal({ type: 'participation', participation: p })}>{formatCompetitionDate(p.nextCompetitionDate)}</button></td>
         <td><button className="ghost danger-text" onClick={() => endHere(p)}>End here</button></td>
         <td>{formatResult(result)}</td>
         <td className="actions">
@@ -1698,7 +1698,7 @@ function ParticipationPage({ rows, db, studentsById, itemsById, query, setQuery,
                 </div>
               </td>
               <td><button className={`level-pill readonly ${allEnded ? 'stopped' : ''}`} onClick={() => setModal({ type: 'groupResult', participations: row.participations, item: row.item })}>{groupLevel(row.participations)}</button></td>
-              <td><button className="date-button" onClick={() => setModal({ type: 'groupDate', participations: row.participations, item: row.item })}>{groupDate(row.participations)}</button></td>
+              <td><button className={`date-button ${allEnded ? 'stopped' : ''}`} disabled={allEnded} onClick={() => setModal({ type: 'groupDate', participations: row.participations, item: row.item })}>{groupDate(row.participations)}</button></td>
               <td><button className="ghost danger-text" onClick={() => toggleGroupEnd(row.participations)}>End here</button></td>
               <td>{groupResult(row.participations)}</td>
               <td></td>
