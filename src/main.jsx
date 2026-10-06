@@ -1657,7 +1657,7 @@ function ParticipationPage({ rows, db, studentsById, itemsById, query, setQuery,
       <FilterBar db={db} filters={filters} setFilters={setFilters} query={query} setQuery={setQuery} compact levels={levels} />
       <PagedTable
         rows={groupedRows}
-        columns={['Student / Group', 'Item', 'Category', 'Increase Level', 'Currently Participated', 'Next Competition Date', 'End', 'Result', 'Actions']}
+        columns={['Student / Group', 'Item', 'Category', 'Increase Level', 'Currently Participating', 'Next Competition Date', 'End', 'Result', 'Actions']}
         sortValue={(row, column) => {
           const participations = row.kind === 'group' ? row.participations : [row.participation];
           const first = participations[0] || {};
