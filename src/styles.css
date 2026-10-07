@@ -1421,7 +1421,7 @@ th {
 .collage-photo {
   aspect-ratio: 3 / 4;
   border: var(--photo-border) solid #111;
-  border-radius: var(--collage-radius);
+  border-radius: var(--collage-photo-radius);
 }
 
 .collage-card > div {

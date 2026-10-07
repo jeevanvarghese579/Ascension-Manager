@@ -2358,7 +2358,7 @@ function CollageDetailsPanel({ collageFilter, setCollageFilter }) {
         <label>H spacing (mm)<input type="number" min="0" value={collageFilter.horizontalSpacing} onChange={(e) => update('horizontalSpacing', Number(e.target.value))} /></label>
         <label>V spacing (mm)<input type="number" min="0" value={collageFilter.verticalSpacing} onChange={(e) => update('verticalSpacing', Number(e.target.value))} /></label>
         <label>Margin (mm)<input type="number" min="0" value={collageFilter.margin} onChange={(e) => update('margin', Number(e.target.value))} /></label>
-        <label>Corner radius<input type="number" min="0" value={collageFilter.cornerRadius} onChange={(e) => update('cornerRadius', Number(e.target.value))} /></label>
+        <label>Corner radius (50+ fully round)<input type="number" min="0" value={collageFilter.cornerRadius} onChange={(e) => update('cornerRadius', Number(e.target.value))} /></label>
         <label>Photo border<input type="number" min="0" step="0.5" value={collageFilter.photoBorder} onChange={(e) => update('photoBorder', Number(e.target.value))} /></label>
         <label>Details border<input type="number" min="0" step="0.5" value={collageFilter.detailsBorder} onChange={(e) => update('detailsBorder', Number(e.target.value))} /></label>
         <label>Name font<input type="number" min="2" value={collageFilter.nameFontSize} onChange={(e) => update('nameFontSize', Number(e.target.value))} /></label>
@@ -2388,7 +2388,7 @@ function CollageSheet({ entries, collageFilter }) {
   const details = collageFilter.details || {};
   const label = (name, value) => collageFilter.showLabels ? `${name}: ${value}` : value;
   return (
-    <div className="collage-sheet" style={{ '--collage-columns': collageFilter.columns, '--collage-h-gap': `${collageFilter.horizontalSpacing * 2}px`, '--collage-v-gap': `${collageFilter.verticalSpacing * 2}px`, '--collage-margin': `${collageFilter.margin * 2}px`, '--collage-radius': `${collageFilter.cornerRadius}px`, '--photo-border': `${collageFilter.photoBorder}px`, '--details-border': `${collageFilter.detailsBorder}px`, '--name-size': `${Math.max(10, collageFilter.nameFontSize * 3)}px`, '--detail-size': `${Math.max(9, collageFilter.detailsFontSize * 3)}px`, fontFamily: collageFilter.fontFamily, textAlign: collageFilter.textAlign, backgroundColor: collageFilter.backgroundColor }}>
+    <div className="collage-sheet" style={{ '--collage-columns': collageFilter.columns, '--collage-h-gap': `${collageFilter.horizontalSpacing * 2}px`, '--collage-v-gap': `${collageFilter.verticalSpacing * 2}px`, '--collage-margin': `${collageFilter.margin * 2}px`, '--collage-radius': `${collageFilter.cornerRadius}px`, '--collage-photo-radius': collageFilter.cornerRadius >= 50 ? '9999px' : `${collageFilter.cornerRadius}px`, '--photo-border': `${collageFilter.photoBorder}px`, '--details-border': `${collageFilter.detailsBorder}px`, '--name-size': `${Math.max(10, collageFilter.nameFontSize * 3)}px`, '--detail-size': `${Math.max(9, collageFilter.detailsFontSize * 3)}px`, fontFamily: collageFilter.fontFamily, textAlign: collageFilter.textAlign, backgroundColor: collageFilter.backgroundColor }}>
       {collageFilter.pageTitle && <h2 className="collage-title">{collageFilter.pageTitle}</h2>}
       {entries.map(({ student, item, level, result }, index) => {
         return (
