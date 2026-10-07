@@ -998,6 +998,12 @@ function App() {
     const levelFilter = collageFilter.level;
     const rows = [];
     const includedStudents = new Set();
+    const groupIdsByStudent = new Map();
+    db.groupMembers.forEach((member) => {
+      if (String(itemsById[member.itemId]?.type || '').toLowerCase() !== 'group') return;
+      if (!groupIdsByStudent.has(member.studentId)) groupIdsByStudent.set(member.studentId, []);
+      groupIdsByStudent.get(member.studentId).push(member.itemId);
+    });
     db.participations.forEach((p) => {
       const student = studentsById[p.studentId];
       const item = itemsById[p.itemId];
@@ -1015,7 +1021,7 @@ function App() {
         if (collageFilter.position !== 'All' && String(result.position || '') !== collageFilter.position) return;
         if (collageFilter.grade !== 'All' && String(result.grade || '') !== collageFilter.grade) return;
         includedStudents.add(student.id);
-        rows.push({ student, item, level, result });
+        rows.push({ student, item, level, result, groupIds: groupIdsByStudent.get(student.id) || [] });
       });
     });
     db.students.forEach((student) => {
@@ -1027,7 +1033,7 @@ function App() {
       if (collageFilter.gender !== 'All' && student.gender !== collageFilter.gender) return;
       if (collageFilter.search && !`${student.name} ${student.className} ${student.admissionNo}`.toLowerCase().includes(collageFilter.search.toLowerCase())) return;
       if (levelFilter !== 'Entire list' && levelFilter !== '') return;
-      rows.push({ student, item: null, level: '', result: {} });
+      rows.push({ student, item: null, level: '', result: {}, groupIds: groupIdsByStudent.get(student.id) || [] });
     });
     const ordered = rows.sort((a, b) => compareResult(a.result, b.result) || a.student.name.localeCompare(b.student.name));
     const seenStudents = new Set();
@@ -1041,11 +1047,34 @@ function App() {
   const renderCollageCanvas = async () => {
     const node = document.querySelector('.collage-sheet');
     if (!node) return null;
-    return html2canvas(node, {
-      backgroundColor: collageFilter.backgroundColor || '#ffffff',
-      scale: Math.max(1, Math.min(4, Number(collageFilter.dpi || 192) / 96)),
-      useCORS: true
-    });
+    const photoSources = [...node.querySelectorAll('[data-collage-photo]')]
+      .map((image) => image.currentSrc || image.src);
+    const uniqueSources = [...new Set(photoSources)];
+    const normalizedPhotos = new Map(await Promise.all(uniqueSources.map(async (source) => [
+      source,
+      await normalizeCollagePhoto(source)
+    ])));
+    const photoNodes = [...node.querySelectorAll('[data-collage-photo]')];
+    await Promise.all(photoNodes.map(async (image, index) => {
+      image.src = normalizedPhotos.get(photoSources[index]) || photoSources[index];
+      try {
+        await image.decode();
+      } catch {
+        // The browser will keep the original source when decoding is unavailable.
+      }
+    }));
+
+    try {
+      return await html2canvas(node, {
+        backgroundColor: collageFilter.backgroundColor || '#ffffff',
+        scale: Math.max(1, Math.min(4, Number(collageFilter.dpi || 192) / 96)),
+        useCORS: true
+      });
+    } finally {
+      photoNodes.forEach((image, index) => {
+        image.src = photoSources[index];
+      });
+    }
   };
 
   const downloadCanvasBlob = (blob, filename) => {
@@ -1738,7 +1767,9 @@ function GracePage({ notifications }) {
 function CollagePage(props) {
   const [selectedKeys, setSelectedKeys] = useState([]);
   const keyFor = (entry) => `${entry.student.id}|${entry.item?.id || 'student'}|${entry.level}`;
-  const selectedEntries = selectedKeys.map((key) => props.entries.find((entry) => keyFor(entry) === key)).filter(Boolean);
+  const selectedEntries = keepGroupEntriesTogether(
+    selectedKeys.map((key) => props.entries.find((entry) => keyFor(entry) === key)).filter(Boolean)
+  );
   const toggle = (entry) => {
     const key = keyFor(entry);
     setSelectedKeys((current) => current.includes(key) ? current.filter((value) => value !== key) : [...current, key]);
@@ -2362,7 +2393,7 @@ function CollageSheet({ entries, collageFilter }) {
       {entries.map(({ student, item, level, result }, index) => {
         return (
           <article className="collage-card" key={`${student.id}-${item?.id || 'student'}-${level}-${index}`}>
-            {details.photo && <img src={student.photo || blankPhoto} alt="" />}
+            {details.photo && <div className="collage-photo"><img data-collage-photo src={student.photo || blankPhoto} alt="" /></div>}
             <div>
               {details.name && <strong>{student.name}</strong>}
               {details.classDivision && classDivision(student) && <span>{label('Class', classDivision(student))}</span>}
@@ -2675,6 +2706,83 @@ function compareResult(a = {}, b = {}) {
   const posB = Number(b.position || 999);
   if (posA !== posB) return posA - posB;
   return String(a.grade || 'Z').localeCompare(String(b.grade || 'Z'));
+}
+
+function keepGroupEntriesTogether(entries) {
+  const arranged = [];
+  const emitted = new Set();
+
+  entries.forEach((entry, startIndex) => {
+    if (emitted.has(startIndex)) return;
+    const connectedGroups = new Set(entry.groupIds || []);
+    if (!connectedGroups.size) {
+      emitted.add(startIndex);
+      arranged.push(entry);
+      return;
+    }
+
+    const connectedIndexes = new Set([startIndex]);
+    let foundConnection = true;
+    while (foundConnection) {
+      foundConnection = false;
+      entries.forEach((candidate, candidateIndex) => {
+        if (emitted.has(candidateIndex) || connectedIndexes.has(candidateIndex)) return;
+        const candidateGroups = candidate.groupIds || [];
+        if (!candidateGroups.some((groupId) => connectedGroups.has(groupId))) return;
+        connectedIndexes.add(candidateIndex);
+        candidateGroups.forEach((groupId) => connectedGroups.add(groupId));
+        foundConnection = true;
+      });
+    }
+
+    connectedIndexes.forEach((index) => {
+      emitted.add(index);
+      arranged.push(entries[index]);
+    });
+  });
+
+  return arranged;
+}
+
+function normalizeCollagePhoto(source) {
+  if (!source) return Promise.resolve(source);
+  return new Promise((resolve) => {
+    const image = new Image();
+    image.crossOrigin = 'anonymous';
+    image.onload = () => {
+      try {
+        const targetWidth = 600;
+        const targetHeight = 800;
+        const targetRatio = targetWidth / targetHeight;
+        const sourceRatio = image.naturalWidth / image.naturalHeight;
+        let sourceX = 0;
+        let sourceY = 0;
+        let sourceWidth = image.naturalWidth;
+        let sourceHeight = image.naturalHeight;
+
+        if (sourceRatio > targetRatio) {
+          sourceWidth = image.naturalHeight * targetRatio;
+          sourceX = (image.naturalWidth - sourceWidth) / 2;
+        } else {
+          sourceHeight = image.naturalWidth / targetRatio;
+          sourceY = (image.naturalHeight - sourceHeight) / 2;
+        }
+
+        const canvas = document.createElement('canvas');
+        canvas.width = targetWidth;
+        canvas.height = targetHeight;
+        const context = canvas.getContext('2d');
+        context.fillStyle = '#ffffff';
+        context.fillRect(0, 0, targetWidth, targetHeight);
+        context.drawImage(image, sourceX, sourceY, sourceWidth, sourceHeight, 0, 0, targetWidth, targetHeight);
+        resolve(canvas.toDataURL('image/jpeg', 0.94));
+      } catch {
+        resolve(source);
+      }
+    };
+    image.onerror = () => resolve(source);
+    image.src = source;
+  });
 }
 
 function readPhoto(file, cb) {
