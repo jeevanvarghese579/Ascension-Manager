@@ -52,6 +52,14 @@ import { APP_DISPLAY_NAME, checkCurrentUserAccess, requestCurrentUserAccess } fr
 import { loadCloudData, loadLocalData, saveCloudData, saveLocalData } from './dataStore';
 import './styles.css';
 
+if ('serviceWorker' in navigator) {
+  window.addEventListener('load', () => {
+    navigator.serviceWorker.register('/sw.js').catch((error) => {
+      console.error('Could not register the Ascension Manager service worker.', error);
+    });
+  });
+}
+
 const APP_NAME = 'School Programmes Ascention Manager';
 const APP_VERSION = 'v1.2';
 const DEFAULT_LEVELS = ['School Level', 'Sub District', 'District', 'State', 'National'];
