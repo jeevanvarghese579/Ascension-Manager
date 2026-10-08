@@ -93,6 +93,7 @@ const blankPhoto =
 
 const POSTER_WIDTH = 1122;
 const POSTER_HEIGHT = 1402;
+const POSTER_DEFAULT_BACKGROUND = '/poster/science-poster-background.png';
 const POSTER_OVERLAY = '/poster/school-award-overlay.png';
 const POSTER_GRADE_ONLY_OVERLAY = '/poster/school-award-overlay-grade-only.png';
 const posterImageCache = new Map();
@@ -1985,8 +1986,9 @@ function SinglePosterPage({ db, levels, entries, posterFilter, setPosterFilter, 
           <label>Main heading<input value={settings.headline} onChange={(event) => updateSetting('headline', event.target.value)} /></label>
           <label>Top subtitle<input value={settings.subtitle} onChange={(event) => updateSetting('subtitle', event.target.value)} /></label>
           <label>School name<input value={settings.schoolName} onChange={(event) => updateSetting('schoolName', event.target.value)} /></label>
-          <label className="poster-base-upload"><span>Base canvas image</span><input type="file" accept="image/*" onChange={(event) => uploadBase(event.target.files?.[0])} /></label>
-          {settings.baseImage && <button className="ghost" onClick={() => updateSetting('baseImage', '')}>Remove base image</button>}
+          <label className="poster-base-upload"><span>Base canvas image (optional override)</span><input type="file" accept="image/*" onChange={(event) => uploadBase(event.target.files?.[0])} /></label>
+          <small className="poster-base-help">The original science-themed canvas is used automatically when no image is uploaded.</small>
+          {settings.baseImage && <button className="ghost" onClick={() => updateSetting('baseImage', '')}>Use original science canvas</button>}
         </aside>
 
         <section className="poster-preview-panel">
@@ -3092,7 +3094,7 @@ async function renderStudentPoster(entry, settings) {
   const hasGrade = Boolean(String(entry.result?.grade || '').trim());
   const useDoubleResult = hasPosition && hasGrade;
   const [baseImage, studentPhoto, overlay] = await Promise.all([
-    loadPosterImage(settings.baseImage),
+    loadPosterImage(settings.baseImage || POSTER_DEFAULT_BACKGROUND),
     loadPosterImage(entry.student.photo || blankPhoto),
     loadPosterImage(useDoubleResult ? POSTER_OVERLAY : POSTER_GRADE_ONLY_OVERLAY)
   ]);
@@ -3101,16 +3103,7 @@ async function renderStudentPoster(entry, settings) {
   canvas.height = POSTER_HEIGHT;
   const context = canvas.getContext('2d');
 
-  if (baseImage) {
-    drawImageCover(context, baseImage, 0, 0, POSTER_WIDTH, POSTER_HEIGHT);
-  } else {
-    const background = context.createLinearGradient(0, 0, 0, POSTER_HEIGHT);
-    background.addColorStop(0, '#061b54');
-    background.addColorStop(0.52, '#173a78');
-    background.addColorStop(1, '#f7e8b0');
-    context.fillStyle = background;
-    context.fillRect(0, 0, POSTER_WIDTH, POSTER_HEIGHT);
-  }
+  drawImageCover(context, baseImage, 0, 0, POSTER_WIDTH, POSTER_HEIGHT);
 
   drawImageCover(context, studentPhoto, 326, 385, 470, 462);
   context.drawImage(overlay, 0, 0, POSTER_WIDTH, POSTER_HEIGHT);
