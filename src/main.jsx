@@ -3055,7 +3055,7 @@ function drawPosterText(context, text, options) {
     maxWidth,
     fontSize,
     minFontSize = 18,
-    family = '"Nirmala UI", "Arial Black", sans-serif',
+    family = '"Poster Malayalam", "Nirmala UI", sans-serif',
     weight = 800,
     fill = '#ffffff',
     stroke = '',
@@ -3089,7 +3089,13 @@ function drawPosterText(context, text, options) {
 }
 
 async function renderStudentPoster(entry, settings) {
-  if (document.fonts?.ready) await document.fonts.ready;
+  if (document.fonts) {
+    await Promise.all([
+      document.fonts.load('900 88px "Poster Malayalam"'),
+      document.fonts.load('900 76px "Poster Slab"')
+    ]);
+    await document.fonts.ready;
+  }
   const hasPosition = Boolean(String(entry.result?.position || '').trim());
   const hasGrade = Boolean(String(entry.result?.grade || '').trim());
   const useDoubleResult = hasPosition && hasGrade;
@@ -3112,24 +3118,24 @@ async function renderStudentPoster(entry, settings) {
   drawPosterText(context, settings.topLine2, { x: 561, y: 139, maxWidth: 700, fontSize: 54 });
   drawPosterText(context, settings.headline, { x: 561, y: 266, maxWidth: 830, fontSize: 88, fill: '#ffd447', stroke: '#7a3a00', strokeWidth: 7, shadowBlur: 8 });
   drawPosterText(context, settings.subtitle, { x: 561, y: 351, maxWidth: 620, fontSize: 36, fill: '#ffffff', stroke: '#123b86', strokeWidth: 5 });
-  drawPosterText(context, String(entry.student.name || '').toUpperCase(), { x: 561, y: 889, maxWidth: 570, fontSize: 45, family: '"Arial Black", "Nirmala UI", sans-serif', fill: '#ffe7a0', stroke: '#5a3300', strokeWidth: 3 });
-  drawPosterText(context, classDivision(entry.student), { x: 561, y: 959, maxWidth: 470, fontSize: 35, fill: '#102662', shadowColor: 'transparent', shadowBlur: 0, shadowOffsetY: 0 });
-  drawPosterText(context, entry.item?.name || '', { x: 561, y: 995, maxWidth: 500, fontSize: 29, weight: 700, fill: '#102662', shadowColor: 'transparent', shadowBlur: 0, shadowOffsetY: 0 });
+  drawPosterText(context, String(entry.student.name || '').toUpperCase(), { x: 561, y: 889, maxWidth: 570, fontSize: 45, family: '"Poster Slab", Georgia, serif', fill: '#ffe7a0', stroke: '#5a3300', strokeWidth: 3 });
+  drawPosterText(context, classDivision(entry.student), { x: 561, y: 959, maxWidth: 470, fontSize: 35, family: '"Poster Slab", Georgia, serif', fill: '#102662', shadowColor: 'transparent', shadowBlur: 0, shadowOffsetY: 0 });
+  drawPosterText(context, entry.item?.name || '', { x: 561, y: 995, maxWidth: 500, fontSize: 29, weight: 700, family: '"Poster Slab", Georgia, serif', fill: '#102662', shadowColor: 'transparent', shadowBlur: 0, shadowOffsetY: 0 });
 
   if (useDoubleResult) {
-    drawPosterText(context, formatOrdinal(entry.result.position), { x: 430, y: 1086, maxWidth: 150, fontSize: 58, family: 'Georgia, serif', fill: '#ffe177', stroke: '#6d3900', strokeWidth: 3 });
-    drawPosterText(context, `${formatOrdinal(entry.result.position)} Prize`, { x: 430, y: 1160, maxWidth: 190, fontSize: 25, family: 'Georgia, serif', fill: '#17204d', shadowColor: 'transparent', shadowBlur: 0, shadowOffsetY: 0 });
-    drawPosterText(context, String(entry.result.grade).toUpperCase(), { x: 692, y: 1081, maxWidth: 130, fontSize: 76, family: 'Georgia, serif', fill: '#ffe177', stroke: '#6d3900', strokeWidth: 3 });
-    drawPosterText(context, formatGrade(entry.result.grade), { x: 692, y: 1160, maxWidth: 190, fontSize: 25, family: 'Georgia, serif', fill: '#17204d', shadowColor: 'transparent', shadowBlur: 0, shadowOffsetY: 0 });
+    drawPosterText(context, formatOrdinal(entry.result.position), { x: 430, y: 1086, maxWidth: 150, fontSize: 58, family: '"Poster Slab", Georgia, serif', fill: '#ffe177', stroke: '#6d3900', strokeWidth: 3 });
+    drawPosterText(context, `${formatOrdinal(entry.result.position)} Prize`, { x: 430, y: 1160, maxWidth: 190, fontSize: 25, family: '"Poster Slab", Georgia, serif', fill: '#17204d', shadowColor: 'transparent', shadowBlur: 0, shadowOffsetY: 0 });
+    drawPosterText(context, String(entry.result.grade).toUpperCase(), { x: 692, y: 1081, maxWidth: 130, fontSize: 76, family: '"Poster Slab", Georgia, serif', fill: '#ffe177', stroke: '#6d3900', strokeWidth: 3 });
+    drawPosterText(context, formatGrade(entry.result.grade), { x: 692, y: 1160, maxWidth: 190, fontSize: 25, family: '"Poster Slab", Georgia, serif', fill: '#17204d', shadowColor: 'transparent', shadowBlur: 0, shadowOffsetY: 0 });
   } else if (hasGrade) {
-    drawPosterText(context, String(entry.result.grade).toUpperCase(), { x: 561, y: 1078, maxWidth: 170, fontSize: 82, family: 'Georgia, serif', fill: '#ffe177', stroke: '#6d3900', strokeWidth: 3 });
-    drawPosterText(context, formatGrade(entry.result.grade), { x: 561, y: 1161, maxWidth: 235, fontSize: 29, family: 'Georgia, serif', fill: '#17204d', shadowColor: 'transparent', shadowBlur: 0, shadowOffsetY: 0 });
+    drawPosterText(context, String(entry.result.grade).toUpperCase(), { x: 561, y: 1078, maxWidth: 170, fontSize: 82, family: '"Poster Slab", Georgia, serif', fill: '#ffe177', stroke: '#6d3900', strokeWidth: 3 });
+    drawPosterText(context, formatGrade(entry.result.grade), { x: 561, y: 1161, maxWidth: 235, fontSize: 29, family: '"Poster Slab", Georgia, serif', fill: '#17204d', shadowColor: 'transparent', shadowBlur: 0, shadowOffsetY: 0 });
   } else if (hasPosition) {
-    drawPosterText(context, formatOrdinal(entry.result.position), { x: 561, y: 1084, maxWidth: 190, fontSize: 65, family: 'Georgia, serif', fill: '#ffe177', stroke: '#6d3900', strokeWidth: 3 });
-    drawPosterText(context, `${formatOrdinal(entry.result.position)} Prize`, { x: 561, y: 1161, maxWidth: 235, fontSize: 29, family: 'Georgia, serif', fill: '#17204d', shadowColor: 'transparent', shadowBlur: 0, shadowOffsetY: 0 });
+    drawPosterText(context, formatOrdinal(entry.result.position), { x: 561, y: 1084, maxWidth: 190, fontSize: 65, family: '"Poster Slab", Georgia, serif', fill: '#ffe177', stroke: '#6d3900', strokeWidth: 3 });
+    drawPosterText(context, `${formatOrdinal(entry.result.position)} Prize`, { x: 561, y: 1161, maxWidth: 235, fontSize: 29, family: '"Poster Slab", Georgia, serif', fill: '#17204d', shadowColor: 'transparent', shadowBlur: 0, shadowOffsetY: 0 });
   }
 
-  drawPosterText(context, settings.schoolName, { x: 561, y: 1301, maxWidth: 730, fontSize: 37, minFontSize: 22, family: 'Georgia, "Times New Roman", serif', fill: '#14265e', shadowColor: 'transparent', shadowBlur: 0, shadowOffsetY: 0 });
+  drawPosterText(context, settings.schoolName, { x: 561, y: 1301, maxWidth: 730, fontSize: 37, minFontSize: 22, family: '"Poster Slab", Georgia, serif', fill: '#14265e', shadowColor: 'transparent', shadowBlur: 0, shadowOffsetY: 0 });
   return canvas;
 }
 
