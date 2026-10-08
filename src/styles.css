@@ -1434,9 +1434,127 @@ th {
   text-align: inherit;
 }
 
+.poster-page {
+  display: grid;
+  gap: 16px;
+}
+
+.poster-builder {
+  display: grid;
+  grid-template-columns: minmax(240px, 0.75fr) 300px minmax(360px, 1.25fr);
+  gap: 16px;
+  align-items: start;
+}
+
+.poster-student-column {
+  display: grid;
+  gap: 14px;
+  min-width: 0;
+}
+
+.poster-settings-panel,
+.poster-preview-panel {
+  background: #ffffff;
+  border: 1px solid #dce5ef;
+  border-radius: 10px;
+  padding: 14px;
+}
+
+.poster-settings-panel {
+  position: sticky;
+  top: 16px;
+}
+
+.poster-settings-panel h2 {
+  margin: 0 0 5px;
+  font-size: 1rem;
+}
+
+.poster-settings-panel > label {
+  display: grid;
+  gap: 5px;
+  margin-top: 10px;
+  color: #405065;
+  font-size: 0.78rem;
+  font-weight: 700;
+}
+
+.poster-settings-panel input {
+  width: 100%;
+  min-height: 36px;
+}
+
+.poster-base-upload input[type='file'] {
+  padding: 6px;
+  background: #f8fafc;
+}
+
+.poster-settings-panel > button {
+  width: 100%;
+  margin-top: 9px;
+}
+
+.poster-preview-panel {
+  min-width: 0;
+}
+
+.poster-preview-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 12px;
+}
+
+.poster-preview-head > div {
+  display: grid;
+  gap: 2px;
+}
+
+.poster-preview-head span {
+  color: #64748b;
+  font-size: 0.76rem;
+}
+
+.poster-preview-head select {
+  width: auto;
+  max-width: 190px;
+}
+
+.poster-preview-canvas {
+  display: block;
+  width: min(100%, 560px);
+  height: auto;
+  margin: 0 auto;
+  background: #ffffff;
+  box-shadow: 0 12px 28px rgba(15, 35, 70, 0.18);
+}
+
+.poster-empty {
+  min-height: 320px;
+  display: grid;
+  place-items: center;
+}
+
+.poster-status {
+  margin: 10px 0 0;
+  color: #405065;
+  font-size: 0.8rem;
+  text-align: center;
+}
+
+.collage-selection-strip button.active {
+  border-color: #176fd1;
+  background: #176fd1;
+  color: #ffffff;
+}
+
 @media (max-width: 1050px) {
   .collage-layout { grid-template-columns: 1fr; }
   .collage-details-panel { position: static; }
+  .poster-builder { grid-template-columns: minmax(0, 1fr) 300px; }
+  .poster-preview-panel { grid-column: 1 / -1; }
+  .poster-settings-panel { position: static; }
 }
 
 .collage-card b {
@@ -1533,6 +1651,14 @@ th {
 
   .collage-details-panel {
     position: static;
+  }
+
+  .poster-builder {
+    grid-template-columns: 1fr;
+  }
+
+  .poster-preview-panel {
+    grid-column: auto;
   }
 
   .form-grid {

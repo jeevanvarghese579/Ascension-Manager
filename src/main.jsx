@@ -91,6 +91,12 @@ const blankPhoto =
     `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 160 160"><rect width="160" height="160" fill="#eef2f7"/><circle cx="80" cy="62" r="28" fill="#9aa7b5"/><path d="M32 142c7-30 25-46 48-46s41 16 48 46" fill="#9aa7b5"/></svg>`
   );
 
+const POSTER_WIDTH = 1122;
+const POSTER_HEIGHT = 1402;
+const POSTER_OVERLAY = '/poster/school-award-overlay.png';
+const POSTER_GRADE_ONLY_OVERLAY = '/poster/school-award-overlay-grade-only.png';
+const posterImageCache = new Map();
+
 const demoPhoto = (name, bg, fg = '#ffffff') =>
   'data:image/svg+xml;utf8,' +
   encodeURIComponent(
@@ -299,6 +305,25 @@ function App() {
       grade: true,
       marks: false
     }
+  });
+  const [posterFilter, setPosterFilter] = useState({
+    level: 'Entire list',
+    categories: [],
+    className: 'All',
+    division: 'All',
+    item: 'All',
+    position: 'All',
+    grade: 'All',
+    gender: 'All',
+    search: ''
+  });
+  const [posterSettings, setPosterSettings] = useState({
+    baseImage: '',
+    topLine1: 'മലപ്പുറം ഉപജില്ല',
+    topLine2: 'സ്കൂൾ ശാസ്ത്രോത്സവം',
+    headline: 'അഭിനന്ദനങ്ങൾ',
+    subtitle: 'ഹൃദയം നിറഞ്ഞ ആശംസകൾ',
+    schoolName: "ST. GEMMA'S GIRLS' HSS MALAPPURAM"
   });
 
   useEffect(() => {
@@ -994,55 +1019,15 @@ function App() {
     notify(errors.length ? `Imported with ${errors.length} warnings.` : 'Import completed.');
   };
 
-  const collageEntries = useMemo(() => {
-    const levelFilter = collageFilter.level;
-    const rows = [];
-    const includedStudents = new Set();
-    const groupIdsByStudent = new Map();
-    db.groupMembers.forEach((member) => {
-      if (String(itemsById[member.itemId]?.type || '').toLowerCase() !== 'group') return;
-      if (!groupIdsByStudent.has(member.studentId)) groupIdsByStudent.set(member.studentId, []);
-      groupIdsByStudent.get(member.studentId).push(member.itemId);
-    });
-    db.participations.forEach((p) => {
-      const student = studentsById[p.studentId];
-      const item = itemsById[p.itemId];
-      if (!student || !item) return;
-      if (collageFilter.categories?.length && !collageFilter.categories.includes(item.category)) return;
-      if (collageFilter.item !== 'All' && item.name !== collageFilter.item) return;
-      if (collageFilter.className !== 'All' && student.className !== collageFilter.className) return;
-      if (collageFilter.division !== 'All' && student.division !== collageFilter.division) return;
-      if (collageFilter.gender !== 'All' && student.gender !== collageFilter.gender) return;
-      if (collageFilter.search && !`${student.name} ${student.className} ${student.admissionNo}`.toLowerCase().includes(collageFilter.search.toLowerCase())) return;
-      const levels = levelFilter === 'Entire list' ? Object.keys(p.results || {}).concat(normalizeLevel(p.currentLevel)) : [levelFilter];
-      [...new Set(levels)].forEach((level) => {
-        const result = p.results?.[level] || {};
-        if (levelFilter !== 'Entire list' && levelRank(p.currentLevel, configuredLevels) < levelRank(level, configuredLevels)) return;
-        if (collageFilter.position !== 'All' && String(result.position || '') !== collageFilter.position) return;
-        if (collageFilter.grade !== 'All' && String(result.grade || '') !== collageFilter.grade) return;
-        includedStudents.add(student.id);
-        rows.push({ student, item, level, result, groupIds: groupIdsByStudent.get(student.id) || [] });
-      });
-    });
-    db.students.forEach((student) => {
-      if (includedStudents.has(student.id)) return;
-      if (collageFilter.categories?.length) return;
-      if (collageFilter.item !== 'All' || collageFilter.position !== 'All' || collageFilter.grade !== 'All') return;
-      if (collageFilter.className !== 'All' && student.className !== collageFilter.className) return;
-      if (collageFilter.division !== 'All' && student.division !== collageFilter.division) return;
-      if (collageFilter.gender !== 'All' && student.gender !== collageFilter.gender) return;
-      if (collageFilter.search && !`${student.name} ${student.className} ${student.admissionNo}`.toLowerCase().includes(collageFilter.search.toLowerCase())) return;
-      if (levelFilter !== 'Entire list' && levelFilter !== '') return;
-      rows.push({ student, item: null, level: '', result: {}, groupIds: groupIdsByStudent.get(student.id) || [] });
-    });
-    const ordered = rows.sort((a, b) => compareResult(a.result, b.result) || a.student.name.localeCompare(b.student.name));
-    const seenStudents = new Set();
-    return ordered.filter((entry) => {
-      if (seenStudents.has(entry.student.id)) return false;
-      seenStudents.add(entry.student.id);
-      return true;
-    });
-  }, [db, studentsById, itemsById, collageFilter]);
+  const collageEntries = useMemo(
+    () => buildGeneratorEntries(db, studentsById, itemsById, collageFilter, configuredLevels),
+    [db, studentsById, itemsById, collageFilter, configuredLevels]
+  );
+
+  const posterEntries = useMemo(
+    () => buildGeneratorEntries(db, studentsById, itemsById, posterFilter, configuredLevels),
+    [db, studentsById, itemsById, posterFilter, configuredLevels]
+  );
 
   const renderCollageCanvas = async () => {
     const node = document.querySelector('.collage-sheet');
@@ -1131,6 +1116,7 @@ function App() {
     ['Participation', ClipboardList],
     ['Grace Marks', Bell],
     ['Collage Generator', FileImage],
+    ['Single Poster Generator', Award],
     ['Settings', Settings]
   ];
 
@@ -1187,7 +1173,7 @@ function App() {
       <main className="main">
         <header className="topbar">
           <div>
-            <h1>{page === 'Collage Generator' ? 'Create Collage' : page}</h1>
+            <h1>{page === 'Collage Generator' ? 'Create Collage' : page === 'Single Poster Generator' ? 'Create Student Posters' : page}</h1>
             <p>Manage students, competition items, level results, and grace mark cases.</p>
           </div>
           <div className="account-status">
@@ -1259,6 +1245,18 @@ function App() {
             downloadCollageImage={downloadCollageImage}
             downloadCollagePdf={downloadCollagePdf}
             downloadCollageSections={downloadCollageSections}
+          />
+        )}
+
+        {page === 'Single Poster Generator' && (
+          <SinglePosterPage
+            db={db}
+            levels={selectableLevels}
+            entries={posterEntries}
+            posterFilter={posterFilter}
+            setPosterFilter={setPosterFilter}
+            settings={posterSettings}
+            setSettings={setPosterSettings}
           />
         )}
 
@@ -1825,6 +1823,184 @@ function CollagePage(props) {
           <CollageSheet entries={selectedEntries} collageFilter={props.collageFilter} />
         </div>
         <CollageDetailsPanel collageFilter={props.collageFilter} setCollageFilter={props.setCollageFilter} />
+      </div>
+    </section>
+  );
+}
+
+function SinglePosterPage({ db, levels, entries, posterFilter, setPosterFilter, settings, setSettings }) {
+  const [selectedKeys, setSelectedKeys] = useState([]);
+  const [previewKey, setPreviewKey] = useState('');
+  const [exporting, setExporting] = useState(false);
+  const [status, setStatus] = useState('');
+  const canvasRef = useRef(null);
+  const keyFor = (entry) => `${entry.student.id}|${entry.item?.id || 'student'}|${entry.level}`;
+  const selectedEntries = keepGroupEntriesTogether(
+    selectedKeys.map((key) => entries.find((entry) => keyFor(entry) === key)).filter(Boolean)
+  );
+  const previewEntry = selectedEntries.find((entry) => keyFor(entry) === previewKey) || selectedEntries[0];
+
+  useEffect(() => {
+    if (!selectedEntries.length) {
+      setPreviewKey('');
+      return;
+    }
+    if (!selectedEntries.some((entry) => keyFor(entry) === previewKey)) {
+      setPreviewKey(keyFor(selectedEntries[0]));
+    }
+  }, [selectedEntries, previewKey]);
+
+  useEffect(() => {
+    let active = true;
+    if (!previewEntry || !canvasRef.current) return undefined;
+    renderStudentPoster(previewEntry, settings).then((rendered) => {
+      if (!active || !canvasRef.current) return;
+      const canvas = canvasRef.current;
+      canvas.width = rendered.width;
+      canvas.height = rendered.height;
+      canvas.getContext('2d').drawImage(rendered, 0, 0);
+    }).catch((error) => {
+      console.error('Could not render the student poster preview.', error);
+      if (active) setStatus('Could not render this poster. Check the uploaded images.');
+    });
+    return () => {
+      active = false;
+    };
+  }, [previewEntry, settings]);
+
+  const toggle = (entry) => {
+    const key = keyFor(entry);
+    setSelectedKeys((current) => current.includes(key) ? current.filter((value) => value !== key) : [...current, key]);
+  };
+  const sortSelected = (field) => {
+    setSelectedKeys((current) => [...current].sort((a, b) => {
+      const left = entries.find((entry) => keyFor(entry) === a);
+      const right = entries.find((entry) => keyFor(entry) === b);
+      if (field === 'position') return Number(left?.result?.position || 999) - Number(right?.result?.position || 999);
+      const leftValue = field === 'item' ? left?.item?.name : left?.student?.[field];
+      const rightValue = field === 'item' ? right?.item?.name : right?.student?.[field];
+      return String(leftValue || '').localeCompare(String(rightValue || ''), undefined, { numeric: true });
+    }));
+  };
+  const randomize = () => setSelectedKeys((current) => {
+    const shuffled = [...current];
+    for (let index = shuffled.length - 1; index > 0; index -= 1) {
+      const target = Math.floor(Math.random() * (index + 1));
+      [shuffled[index], shuffled[target]] = [shuffled[target], shuffled[index]];
+    }
+    return shuffled;
+  });
+  const updateSetting = (key, value) => setSettings({ ...settings, [key]: value });
+  const uploadBase = (file) => readPhoto(file, (baseImage) => updateSetting('baseImage', baseImage));
+  const exportCurrent = async () => {
+    if (!previewEntry || exporting) return;
+    setExporting(true);
+    setStatus('Creating poster…');
+    try {
+      const canvas = await renderStudentPoster(previewEntry, settings);
+      const blob = await canvasToBlob(canvas, 'image/png');
+      downloadGeneratedBlob(blob, `${safeFilename(previewEntry.student.name)}-poster.png`);
+      setStatus('Poster downloaded.');
+    } catch (error) {
+      console.error('Could not export the student poster.', error);
+      setStatus('Poster export failed. Please try again.');
+    } finally {
+      setExporting(false);
+    }
+  };
+  const exportBatch = async () => {
+    if (!selectedEntries.length || exporting) return;
+    setExporting(true);
+    setStatus(`Creating 0 of ${selectedEntries.length} posters…`);
+    try {
+      const zip = new JSZip();
+      for (let index = 0; index < selectedEntries.length; index += 1) {
+        const entry = selectedEntries[index];
+        setStatus(`Creating ${index + 1} of ${selectedEntries.length} posters…`);
+        const canvas = await renderStudentPoster(entry, settings);
+        zip.file(`${String(index + 1).padStart(2, '0')}-${safeFilename(entry.student.name)}-poster.png`, await canvasToBlob(canvas, 'image/png'));
+      }
+      downloadGeneratedBlob(await zip.generateAsync({ type: 'blob' }), 'student-posters.zip');
+      setStatus(`${selectedEntries.length} posters downloaded as a ZIP file.`);
+    } catch (error) {
+      console.error('Could not export the poster batch.', error);
+      setStatus('Batch export failed. Please try again.');
+    } finally {
+      setExporting(false);
+    }
+  };
+
+  return (
+    <section className="poster-page">
+      <div className="collage-page-head">
+        <div><strong>{entries.length} matching students · {selectedEntries.length} selected</strong></div>
+        <div className="collage-export-actions">
+          <button disabled={!previewEntry || exporting} onClick={exportCurrent}><Download size={16} /> Download current</button>
+          <button className="primary" disabled={!selectedEntries.length || exporting} onClick={exportBatch}><Images size={16} /> {exporting ? 'Preparing…' : 'Batch download'}</button>
+        </div>
+      </div>
+
+      <CollageControls
+        db={db}
+        levels={levels}
+        collageFilter={posterFilter}
+        setCollageFilter={setPosterFilter}
+        entries={entries}
+        selectedKeys={selectedKeys}
+        setSelectedKeys={setSelectedKeys}
+        keyFor={keyFor}
+        sortSelected={sortSelected}
+        randomize={randomize}
+      />
+
+      <div className="poster-builder">
+        <div className="poster-student-column">
+          {selectedEntries.length > 0 && (
+            <section className="collage-selection-strip">
+              <strong>Selected Students ({selectedEntries.length})</strong>
+              <div>{selectedEntries.map((entry) => (
+                <button className={keyFor(entry) === keyFor(previewEntry) ? 'active' : ''} key={keyFor(entry)} onClick={() => setPreviewKey(keyFor(entry))}>
+                  {entry.student.name}
+                </button>
+              ))}</div>
+            </section>
+          )}
+          <section className="collage-picker-panel">
+            <strong>Filtered Students ({entries.length})</strong>
+            <div className="collage-picker-grid">
+              {entries.map((entry) => {
+                const selected = selectedKeys.includes(keyFor(entry));
+                return <button className={selected ? 'selected' : ''} key={keyFor(entry)} onClick={() => toggle(entry)}><img src={entry.student.photo || blankPhoto} alt="" /><span>{entry.student.name}</span><small>{entry.item?.name || classDivision(entry.student)}</small></button>;
+              })}
+            </div>
+            {!entries.length && <div className="empty">No matching students. Adjust the filters above.</div>}
+          </section>
+        </div>
+
+        <aside className="poster-settings-panel">
+          <h2>Common Poster Text</h2>
+          <p className="muted">These values are used for every selected student. The template font styling is fixed automatically.</p>
+          <label>Top line 1<input value={settings.topLine1} onChange={(event) => updateSetting('topLine1', event.target.value)} /></label>
+          <label>Top line 2<input value={settings.topLine2} onChange={(event) => updateSetting('topLine2', event.target.value)} /></label>
+          <label>Main heading<input value={settings.headline} onChange={(event) => updateSetting('headline', event.target.value)} /></label>
+          <label>Top subtitle<input value={settings.subtitle} onChange={(event) => updateSetting('subtitle', event.target.value)} /></label>
+          <label>School name<input value={settings.schoolName} onChange={(event) => updateSetting('schoolName', event.target.value)} /></label>
+          <label className="poster-base-upload"><span>Base canvas image</span><input type="file" accept="image/*" onChange={(event) => uploadBase(event.target.files?.[0])} /></label>
+          {settings.baseImage && <button className="ghost" onClick={() => updateSetting('baseImage', '')}>Remove base image</button>}
+        </aside>
+
+        <section className="poster-preview-panel">
+          <div className="poster-preview-head">
+            <div><strong>Poster Preview</strong>{previewEntry && <span>{previewEntry.student.name} · {previewEntry.item?.name || 'No item'}</span>}</div>
+            {selectedEntries.length > 1 && (
+              <select value={previewEntry ? keyFor(previewEntry) : ''} onChange={(event) => setPreviewKey(event.target.value)}>
+                {selectedEntries.map((entry) => <option key={keyFor(entry)} value={keyFor(entry)}>{entry.student.name}</option>)}
+              </select>
+            )}
+          </div>
+          {previewEntry ? <canvas ref={canvasRef} className="poster-preview-canvas" /> : <div className="empty poster-empty">Select at least one student to preview a poster.</div>}
+          {status && <p className="poster-status">{status}</p>}
+        </section>
       </div>
     </section>
   );
@@ -2708,6 +2884,58 @@ function compareResult(a = {}, b = {}) {
   return String(a.grade || 'Z').localeCompare(String(b.grade || 'Z'));
 }
 
+function buildGeneratorEntries(db, studentsById, itemsById, filter, configuredLevels) {
+  const levelFilter = filter.level;
+  const rows = [];
+  const includedStudents = new Set();
+  const groupIdsByStudent = new Map();
+  db.groupMembers.forEach((member) => {
+    if (String(itemsById[member.itemId]?.type || '').toLowerCase() !== 'group') return;
+    if (!groupIdsByStudent.has(member.studentId)) groupIdsByStudent.set(member.studentId, []);
+    groupIdsByStudent.get(member.studentId).push(member.itemId);
+  });
+  db.participations.forEach((participation) => {
+    const student = studentsById[participation.studentId];
+    const item = itemsById[participation.itemId];
+    if (!student || !item) return;
+    if (filter.categories?.length && !filter.categories.includes(item.category)) return;
+    if (filter.item !== 'All' && item.name !== filter.item) return;
+    if (filter.className !== 'All' && student.className !== filter.className) return;
+    if (filter.division !== 'All' && student.division !== filter.division) return;
+    if (filter.gender !== 'All' && student.gender !== filter.gender) return;
+    if (filter.search && !`${student.name} ${student.className} ${student.admissionNo}`.toLowerCase().includes(filter.search.toLowerCase())) return;
+    const levels = levelFilter === 'Entire list'
+      ? Object.keys(participation.results || {}).concat(normalizeLevel(participation.currentLevel))
+      : [levelFilter];
+    [...new Set(levels)].forEach((level) => {
+      const result = participation.results?.[level] || {};
+      if (levelFilter !== 'Entire list' && levelRank(participation.currentLevel, configuredLevels) < levelRank(level, configuredLevels)) return;
+      if (filter.position !== 'All' && String(result.position || '') !== filter.position) return;
+      if (filter.grade !== 'All' && String(result.grade || '') !== filter.grade) return;
+      includedStudents.add(student.id);
+      rows.push({ student, item, level, result, groupIds: groupIdsByStudent.get(student.id) || [] });
+    });
+  });
+  db.students.forEach((student) => {
+    if (includedStudents.has(student.id)) return;
+    if (filter.categories?.length) return;
+    if (filter.item !== 'All' || filter.position !== 'All' || filter.grade !== 'All') return;
+    if (filter.className !== 'All' && student.className !== filter.className) return;
+    if (filter.division !== 'All' && student.division !== filter.division) return;
+    if (filter.gender !== 'All' && student.gender !== filter.gender) return;
+    if (filter.search && !`${student.name} ${student.className} ${student.admissionNo}`.toLowerCase().includes(filter.search.toLowerCase())) return;
+    if (levelFilter !== 'Entire list' && levelFilter !== '') return;
+    rows.push({ student, item: null, level: '', result: {}, groupIds: groupIdsByStudent.get(student.id) || [] });
+  });
+  const ordered = rows.sort((a, b) => compareResult(a.result, b.result) || a.student.name.localeCompare(b.student.name));
+  const seenStudents = new Set();
+  return ordered.filter((entry) => {
+    if (seenStudents.has(entry.student.id)) return false;
+    seenStudents.add(entry.student.id);
+    return true;
+  });
+}
+
 function keepGroupEntriesTogether(entries) {
   const arranged = [];
   const emitted = new Set();
@@ -2783,6 +3011,151 @@ function normalizeCollagePhoto(source) {
     image.onerror = () => resolve(source);
     image.src = source;
   });
+}
+
+function loadPosterImage(source) {
+  if (!source) return Promise.resolve(null);
+  if (!posterImageCache.has(source)) {
+    posterImageCache.set(source, new Promise((resolve, reject) => {
+      const image = new Image();
+      image.crossOrigin = 'anonymous';
+      image.onload = () => resolve(image);
+      image.onerror = () => reject(new Error(`Could not load poster image: ${source.slice(0, 80)}`));
+      image.src = source;
+    }));
+  }
+  return posterImageCache.get(source);
+}
+
+function drawImageCover(context, image, x, y, width, height) {
+  if (!image?.naturalWidth || !image?.naturalHeight) return;
+  const sourceRatio = image.naturalWidth / image.naturalHeight;
+  const targetRatio = width / height;
+  let sourceX = 0;
+  let sourceY = 0;
+  let sourceWidth = image.naturalWidth;
+  let sourceHeight = image.naturalHeight;
+  if (sourceRatio > targetRatio) {
+    sourceWidth = image.naturalHeight * targetRatio;
+    sourceX = (image.naturalWidth - sourceWidth) / 2;
+  } else {
+    sourceHeight = image.naturalWidth / targetRatio;
+    sourceY = (image.naturalHeight - sourceHeight) / 2;
+  }
+  context.drawImage(image, sourceX, sourceY, sourceWidth, sourceHeight, x, y, width, height);
+}
+
+function drawPosterText(context, text, options) {
+  if (!String(text || '').trim()) return;
+  const {
+    x,
+    y,
+    maxWidth,
+    fontSize,
+    minFontSize = 18,
+    family = '"Nirmala UI", "Arial Black", sans-serif',
+    weight = 800,
+    fill = '#ffffff',
+    stroke = '',
+    strokeWidth = 0,
+    shadowColor = 'rgba(0, 0, 0, 0.35)',
+    shadowBlur = 4,
+    shadowOffsetY = 2
+  } = options;
+  const value = String(text).trim();
+  let size = fontSize;
+  context.save();
+  context.textAlign = 'center';
+  context.textBaseline = 'middle';
+  do {
+    context.font = `${weight} ${size}px ${family}`;
+    if (context.measureText(value).width <= maxWidth || size <= minFontSize) break;
+    size -= 2;
+  } while (size > minFontSize);
+  context.shadowColor = shadowColor;
+  context.shadowBlur = shadowBlur;
+  context.shadowOffsetY = shadowOffsetY;
+  if (stroke && strokeWidth) {
+    context.lineJoin = 'round';
+    context.lineWidth = strokeWidth;
+    context.strokeStyle = stroke;
+    context.strokeText(value, x, y, maxWidth);
+  }
+  context.fillStyle = fill;
+  context.fillText(value, x, y, maxWidth);
+  context.restore();
+}
+
+async function renderStudentPoster(entry, settings) {
+  if (document.fonts?.ready) await document.fonts.ready;
+  const hasPosition = Boolean(String(entry.result?.position || '').trim());
+  const hasGrade = Boolean(String(entry.result?.grade || '').trim());
+  const useDoubleResult = hasPosition && hasGrade;
+  const [baseImage, studentPhoto, overlay] = await Promise.all([
+    loadPosterImage(settings.baseImage),
+    loadPosterImage(entry.student.photo || blankPhoto),
+    loadPosterImage(useDoubleResult ? POSTER_OVERLAY : POSTER_GRADE_ONLY_OVERLAY)
+  ]);
+  const canvas = document.createElement('canvas');
+  canvas.width = POSTER_WIDTH;
+  canvas.height = POSTER_HEIGHT;
+  const context = canvas.getContext('2d');
+
+  if (baseImage) {
+    drawImageCover(context, baseImage, 0, 0, POSTER_WIDTH, POSTER_HEIGHT);
+  } else {
+    const background = context.createLinearGradient(0, 0, 0, POSTER_HEIGHT);
+    background.addColorStop(0, '#061b54');
+    background.addColorStop(0.52, '#173a78');
+    background.addColorStop(1, '#f7e8b0');
+    context.fillStyle = background;
+    context.fillRect(0, 0, POSTER_WIDTH, POSTER_HEIGHT);
+  }
+
+  drawImageCover(context, studentPhoto, 326, 385, 470, 462);
+  context.drawImage(overlay, 0, 0, POSTER_WIDTH, POSTER_HEIGHT);
+
+  drawPosterText(context, settings.topLine1, { x: 561, y: 53, maxWidth: 335, fontSize: 37 });
+  drawPosterText(context, settings.topLine2, { x: 561, y: 139, maxWidth: 700, fontSize: 54 });
+  drawPosterText(context, settings.headline, { x: 561, y: 266, maxWidth: 830, fontSize: 88, fill: '#ffd447', stroke: '#7a3a00', strokeWidth: 7, shadowBlur: 8 });
+  drawPosterText(context, settings.subtitle, { x: 561, y: 351, maxWidth: 620, fontSize: 36, fill: '#ffffff', stroke: '#123b86', strokeWidth: 5 });
+  drawPosterText(context, String(entry.student.name || '').toUpperCase(), { x: 561, y: 889, maxWidth: 570, fontSize: 45, family: '"Arial Black", "Nirmala UI", sans-serif', fill: '#ffe7a0', stroke: '#5a3300', strokeWidth: 3 });
+  drawPosterText(context, classDivision(entry.student), { x: 561, y: 959, maxWidth: 470, fontSize: 35, fill: '#102662', shadowColor: 'transparent', shadowBlur: 0, shadowOffsetY: 0 });
+  drawPosterText(context, entry.item?.name || '', { x: 561, y: 995, maxWidth: 500, fontSize: 29, weight: 700, fill: '#102662', shadowColor: 'transparent', shadowBlur: 0, shadowOffsetY: 0 });
+
+  if (useDoubleResult) {
+    drawPosterText(context, formatOrdinal(entry.result.position), { x: 430, y: 1086, maxWidth: 150, fontSize: 58, family: 'Georgia, serif', fill: '#ffe177', stroke: '#6d3900', strokeWidth: 3 });
+    drawPosterText(context, `${formatOrdinal(entry.result.position)} Prize`, { x: 430, y: 1160, maxWidth: 190, fontSize: 25, family: 'Georgia, serif', fill: '#17204d', shadowColor: 'transparent', shadowBlur: 0, shadowOffsetY: 0 });
+    drawPosterText(context, String(entry.result.grade).toUpperCase(), { x: 692, y: 1081, maxWidth: 130, fontSize: 76, family: 'Georgia, serif', fill: '#ffe177', stroke: '#6d3900', strokeWidth: 3 });
+    drawPosterText(context, formatGrade(entry.result.grade), { x: 692, y: 1160, maxWidth: 190, fontSize: 25, family: 'Georgia, serif', fill: '#17204d', shadowColor: 'transparent', shadowBlur: 0, shadowOffsetY: 0 });
+  } else if (hasGrade) {
+    drawPosterText(context, String(entry.result.grade).toUpperCase(), { x: 561, y: 1078, maxWidth: 170, fontSize: 82, family: 'Georgia, serif', fill: '#ffe177', stroke: '#6d3900', strokeWidth: 3 });
+    drawPosterText(context, formatGrade(entry.result.grade), { x: 561, y: 1161, maxWidth: 235, fontSize: 29, family: 'Georgia, serif', fill: '#17204d', shadowColor: 'transparent', shadowBlur: 0, shadowOffsetY: 0 });
+  } else if (hasPosition) {
+    drawPosterText(context, formatOrdinal(entry.result.position), { x: 561, y: 1084, maxWidth: 190, fontSize: 65, family: 'Georgia, serif', fill: '#ffe177', stroke: '#6d3900', strokeWidth: 3 });
+    drawPosterText(context, `${formatOrdinal(entry.result.position)} Prize`, { x: 561, y: 1161, maxWidth: 235, fontSize: 29, family: 'Georgia, serif', fill: '#17204d', shadowColor: 'transparent', shadowBlur: 0, shadowOffsetY: 0 });
+  }
+
+  drawPosterText(context, settings.schoolName, { x: 561, y: 1301, maxWidth: 730, fontSize: 37, minFontSize: 22, family: 'Georgia, "Times New Roman", serif', fill: '#14265e', shadowColor: 'transparent', shadowBlur: 0, shadowOffsetY: 0 });
+  return canvas;
+}
+
+function canvasToBlob(canvas, type = 'image/png', quality = 1) {
+  return new Promise((resolve) => canvas.toBlob(resolve, type, quality));
+}
+
+function safeFilename(value) {
+  return String(value || 'student').trim().replace(/[<>:"/\\|?*]+/g, '-').replace(/\s+/g, '-');
+}
+
+function downloadGeneratedBlob(blob, filename) {
+  if (!blob) return;
+  const link = document.createElement('a');
+  const url = URL.createObjectURL(blob);
+  link.href = url;
+  link.download = filename;
+  link.click();
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
 }
 
 function readPhoto(file, cb) {
