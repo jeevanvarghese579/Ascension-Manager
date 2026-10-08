@@ -1,5 +1,5 @@
 const CACHE_PREFIX = 'ascension-manager-';
-const CACHE_NAME = `${CACHE_PREFIX}v1.3.0`;
+const CACHE_NAME = `${CACHE_PREFIX}v1.4.0`;
 const APP_SHELL = [
   '/',
   '/manifest.webmanifest',

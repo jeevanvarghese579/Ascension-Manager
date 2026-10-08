@@ -95,7 +95,6 @@ const POSTER_WIDTH = 1122;
 const POSTER_HEIGHT = 1402;
 const POSTER_DEFAULT_BACKGROUND = '/poster/science-poster-background.png';
 const POSTER_OVERLAY = '/poster/school-award-overlay.png';
-const POSTER_GRADE_ONLY_OVERLAY = '/poster/school-award-overlay-grade-only.png';
 const posterImageCache = new Map();
 
 const demoPhoto = (name, bg, fg = '#ffffff') =>
@@ -3098,11 +3097,10 @@ async function renderStudentPoster(entry, settings) {
   }
   const hasPosition = Boolean(String(entry.result?.position || '').trim());
   const hasGrade = Boolean(String(entry.result?.grade || '').trim());
-  const useDoubleResult = hasPosition && hasGrade;
   const [baseImage, studentPhoto, overlay] = await Promise.all([
     loadPosterImage(settings.baseImage || POSTER_DEFAULT_BACKGROUND),
     loadPosterImage(entry.student.photo || blankPhoto),
-    loadPosterImage(useDoubleResult ? POSTER_OVERLAY : POSTER_GRADE_ONLY_OVERLAY)
+    loadPosterImage(POSTER_OVERLAY)
   ]);
   const canvas = document.createElement('canvas');
   canvas.width = POSTER_WIDTH;
@@ -3111,31 +3109,29 @@ async function renderStudentPoster(entry, settings) {
 
   drawImageCover(context, baseImage, 0, 0, POSTER_WIDTH, POSTER_HEIGHT);
 
-  drawImageCover(context, studentPhoto, 326, 385, 470, 462);
+  context.save();
+  context.beginPath();
+  context.arc(561, 557, 252, 0, Math.PI * 2);
+  context.clip();
+  drawImageCover(context, studentPhoto, 309, 305, 504, 504);
+  context.restore();
   context.drawImage(overlay, 0, 0, POSTER_WIDTH, POSTER_HEIGHT);
 
-  drawPosterText(context, settings.topLine1, { x: 561, y: 53, maxWidth: 335, fontSize: 37 });
-  drawPosterText(context, settings.topLine2, { x: 561, y: 139, maxWidth: 700, fontSize: 54 });
-  drawPosterText(context, settings.headline, { x: 561, y: 266, maxWidth: 830, fontSize: 88, fill: '#ffd447', stroke: '#7a3a00', strokeWidth: 7, shadowBlur: 8 });
-  drawPosterText(context, settings.subtitle, { x: 561, y: 351, maxWidth: 620, fontSize: 36, fill: '#ffffff', stroke: '#123b86', strokeWidth: 5 });
-  drawPosterText(context, String(entry.student.name || '').toUpperCase(), { x: 561, y: 889, maxWidth: 570, fontSize: 45, family: '"Poster Slab", Georgia, serif', fill: '#ffe7a0', stroke: '#5a3300', strokeWidth: 3 });
-  drawPosterText(context, classDivision(entry.student), { x: 561, y: 959, maxWidth: 470, fontSize: 35, family: '"Poster Slab", Georgia, serif', fill: '#102662', shadowColor: 'transparent', shadowBlur: 0, shadowOffsetY: 0 });
-  drawPosterText(context, entry.item?.name || '', { x: 561, y: 995, maxWidth: 500, fontSize: 29, weight: 700, family: '"Poster Slab", Georgia, serif', fill: '#102662', shadowColor: 'transparent', shadowBlur: 0, shadowOffsetY: 0 });
+  drawPosterText(context, settings.topLine1, { x: 561, y: 50, maxWidth: 335, fontSize: 34 });
+  drawPosterText(context, settings.topLine2, { x: 561, y: 116, maxWidth: 760, fontSize: 29 });
+  drawPosterText(context, settings.headline, { x: 561, y: 163, maxWidth: 810, fontSize: 42, fill: '#ffd86a', stroke: '#673600', strokeWidth: 4, shadowBlur: 5 });
+  drawPosterText(context, settings.subtitle, { x: 561, y: 207, maxWidth: 700, fontSize: 19, fill: '#ffffff', stroke: '#123b86', strokeWidth: 2 });
+  drawPosterText(context, String(entry.student.name || '').toUpperCase(), { x: 561, y: 893, maxWidth: 590, fontSize: 43, family: '"Poster Slab", Georgia, serif', fill: '#ffe7a0', stroke: '#5a3300', strokeWidth: 3 });
 
-  if (useDoubleResult) {
-    drawPosterText(context, formatOrdinal(entry.result.position), { x: 430, y: 1086, maxWidth: 150, fontSize: 58, family: '"Poster Slab", Georgia, serif', fill: '#ffe177', stroke: '#6d3900', strokeWidth: 3 });
-    drawPosterText(context, `${formatOrdinal(entry.result.position)} Prize`, { x: 430, y: 1160, maxWidth: 190, fontSize: 25, family: '"Poster Slab", Georgia, serif', fill: '#17204d', shadowColor: 'transparent', shadowBlur: 0, shadowOffsetY: 0 });
-    drawPosterText(context, String(entry.result.grade).toUpperCase(), { x: 692, y: 1081, maxWidth: 130, fontSize: 76, family: '"Poster Slab", Georgia, serif', fill: '#ffe177', stroke: '#6d3900', strokeWidth: 3 });
-    drawPosterText(context, formatGrade(entry.result.grade), { x: 692, y: 1160, maxWidth: 190, fontSize: 25, family: '"Poster Slab", Georgia, serif', fill: '#17204d', shadowColor: 'transparent', shadowBlur: 0, shadowOffsetY: 0 });
-  } else if (hasGrade) {
-    drawPosterText(context, String(entry.result.grade).toUpperCase(), { x: 561, y: 1078, maxWidth: 170, fontSize: 82, family: '"Poster Slab", Georgia, serif', fill: '#ffe177', stroke: '#6d3900', strokeWidth: 3 });
-    drawPosterText(context, formatGrade(entry.result.grade), { x: 561, y: 1161, maxWidth: 235, fontSize: 29, family: '"Poster Slab", Georgia, serif', fill: '#17204d', shadowColor: 'transparent', shadowBlur: 0, shadowOffsetY: 0 });
-  } else if (hasPosition) {
-    drawPosterText(context, formatOrdinal(entry.result.position), { x: 561, y: 1084, maxWidth: 190, fontSize: 65, family: '"Poster Slab", Georgia, serif', fill: '#ffe177', stroke: '#6d3900', strokeWidth: 3 });
-    drawPosterText(context, `${formatOrdinal(entry.result.position)} Prize`, { x: 561, y: 1161, maxWidth: 235, fontSize: 29, family: '"Poster Slab", Georgia, serif', fill: '#17204d', shadowColor: 'transparent', shadowBlur: 0, shadowOffsetY: 0 });
-  }
+  const resultLine = [
+    hasPosition ? `${formatOrdinal(entry.result.position)} Prize` : '',
+    hasGrade ? formatGrade(entry.result.grade) : ''
+  ].filter(Boolean).join('  •  ');
+  drawPosterText(context, classDivision(entry.student), { x: 561, y: 1038, maxWidth: 590, fontSize: 30, family: '"Poster Slab", Georgia, serif', fill: '#102662', shadowColor: 'transparent', shadowBlur: 0, shadowOffsetY: 0 });
+  drawPosterText(context, entry.item?.name || '', { x: 561, y: 1082, maxWidth: 620, fontSize: 28, weight: 700, family: '"Poster Slab", Georgia, serif', fill: '#102662', shadowColor: 'transparent', shadowBlur: 0, shadowOffsetY: 0 });
+  drawPosterText(context, resultLine, { x: 561, y: 1121, maxWidth: 620, fontSize: 32, minFontSize: 21, family: '"Poster Slab", Georgia, serif', fill: '#9a5900', stroke: '#fff3c2', strokeWidth: 1.5, shadowColor: 'transparent', shadowBlur: 0, shadowOffsetY: 0 });
 
-  drawPosterText(context, settings.schoolName, { x: 561, y: 1301, maxWidth: 730, fontSize: 37, minFontSize: 22, family: '"Poster Slab", Georgia, serif', fill: '#14265e', shadowColor: 'transparent', shadowBlur: 0, shadowOffsetY: 0 });
+  drawPosterText(context, settings.schoolName, { x: 561, y: 1296, maxWidth: 790, fontSize: 35, minFontSize: 21, family: '"Poster Slab", Georgia, serif', fill: '#14265e', shadowColor: 'transparent', shadowBlur: 0, shadowOffsetY: 0 });
   return canvas;
 }
 
