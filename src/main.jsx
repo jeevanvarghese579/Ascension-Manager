@@ -3204,6 +3204,81 @@ function drawPosterCurvedText(context, text, options) {
   context.restore();
 }
 
+function roundedPosterRect(context, x, y, width, height, radius) {
+  const safeRadius = Math.min(radius, width / 2, height / 2);
+  context.beginPath();
+  context.moveTo(x + safeRadius, y);
+  context.lineTo(x + width - safeRadius, y);
+  context.quadraticCurveTo(x + width, y, x + width, y + safeRadius);
+  context.lineTo(x + width, y + height - safeRadius);
+  context.quadraticCurveTo(x + width, y + height, x + width - safeRadius, y + height);
+  context.lineTo(x + safeRadius, y + height);
+  context.quadraticCurveTo(x, y + height, x, y + height - safeRadius);
+  context.lineTo(x, y + safeRadius);
+  context.quadraticCurveTo(x, y, x + safeRadius, y);
+  context.closePath();
+}
+
+function drawPosterResultBadges(context, labels, options = {}) {
+  const values = labels.filter(Boolean);
+  if (!values.length) return;
+  const { x = 561, y = 1136, maxWidth = 620 } = options;
+  const gap = values.length > 1 ? 18 : 0;
+  const badgeHeight = 42;
+  const badgeWidth = Math.min(values.length > 1 ? 270 : 330, (maxWidth - gap) / values.length);
+  const totalWidth = badgeWidth * values.length + gap * (values.length - 1);
+  const startX = x - totalWidth / 2;
+
+  values.forEach((label, index) => {
+    const badgeX = startX + index * (badgeWidth + gap);
+    const badgeY = y - badgeHeight / 2;
+    context.save();
+    context.shadowColor = 'rgba(15, 27, 70, 0.38)';
+    context.shadowBlur = 8;
+    context.shadowOffsetY = 3;
+    roundedPosterRect(context, badgeX, badgeY, badgeWidth, badgeHeight, 18);
+    const badgeGradient = context.createLinearGradient(0, badgeY, 0, badgeY + badgeHeight);
+    badgeGradient.addColorStop(0, '#143d91');
+    badgeGradient.addColorStop(0.52, '#071f63');
+    badgeGradient.addColorStop(1, '#041442');
+    context.fillStyle = badgeGradient;
+    context.fill();
+    context.shadowColor = 'transparent';
+    context.lineWidth = 3;
+    context.strokeStyle = '#e7a91d';
+    context.stroke();
+
+    context.fillStyle = '#ffd86a';
+    [badgeX + 13, badgeX + badgeWidth - 13].forEach((ornamentX) => {
+      context.beginPath();
+      context.moveTo(ornamentX, y - 5);
+      context.lineTo(ornamentX + 5, y);
+      context.lineTo(ornamentX, y + 5);
+      context.lineTo(ornamentX - 5, y);
+      context.closePath();
+      context.fill();
+    });
+    context.restore();
+
+    drawPosterText(context, label, {
+      x: badgeX + badgeWidth / 2,
+      y,
+      maxWidth: badgeWidth - 48,
+      fontSize: 27,
+      minFontSize: 19,
+      weight: 900,
+      family: '"Poster Display", serif',
+      boxHeight: 34,
+      fill: '#fff4c7',
+      stroke: '#6d3700',
+      strokeWidth: 1.2,
+      shadowColor: 'rgba(0, 0, 0, 0.45)',
+      shadowBlur: 2,
+      shadowOffsetY: 1
+    });
+  });
+}
+
 async function renderStudentPoster(entry, settings) {
   if (document.fonts) {
     await Promise.all([
@@ -3229,11 +3304,11 @@ async function renderStudentPoster(entry, settings) {
 
   context.save();
   context.beginPath();
-  context.ellipse(560, 562, 273, 243, 0, 0, Math.PI * 2);
+  context.ellipse(560, 562, 280, 250, 0, 0, Math.PI * 2);
   context.clip();
-  context.fillStyle = '#f7f8fa';
-  context.fillRect(287, 319, 546, 486);
-  drawImageContain(context, studentPhoto, 287, 319, 546, 486, 5);
+  context.fillStyle = '#ffffff';
+  context.fillRect(280, 312, 560, 500);
+  drawImageContain(context, studentPhoto, 280, 312, 560, 500);
   context.restore();
   context.drawImage(overlay, 0, 0, POSTER_WIDTH, POSTER_HEIGHT);
 
@@ -3241,20 +3316,15 @@ async function renderStudentPoster(entry, settings) {
   drawPosterText(context, settings.topLine2, { x: 561, y: 120, maxWidth: 750, fontSize: 27, minFontSize: 18, family: '"Poster Display", "Poster Malayalam", serif', boxHeight: 36 });
   drawPosterText(context, settings.headline, { x: 561, y: 162, maxWidth: 810, fontSize: 40, minFontSize: 24, family: '"Poster Display", "Poster Malayalam", serif', fill: '#ffd86a', stroke: '#673600', strokeWidth: 4, shadowBlur: 5, boxHeight: 48 });
   drawPosterText(context, settings.subtitle, { x: 561, y: 200, maxWidth: 680, fontSize: 18, minFontSize: 13, family: '"Poster Sans", "Poster Malayalam", sans-serif', maxLines: 2, lineHeight: 1, boxHeight: 30, fill: '#ffffff', stroke: '#123b86', strokeWidth: 2 });
-  drawPosterCurvedText(context, String(entry.student.name || '').toUpperCase(), { x: 561, y: 878, maxWidth: 590, fontSize: 40, minFontSize: 23, curveDepth: 10 });
+  drawPosterCurvedText(context, String(entry.student.name || '').toUpperCase(), { x: 561, y: 858, maxWidth: 590, fontSize: 40, minFontSize: 23, curveDepth: 8 });
 
-  const resultLine = [
+  const resultLabels = [
     hasPosition ? `${formatOrdinal(entry.result.position)} Prize` : '',
     hasGrade ? formatGrade(entry.result.grade) : ''
-  ].filter(Boolean).join('  •  ');
+  ].filter(Boolean);
   drawPosterText(context, classDivision(entry.student), { x: 561, y: 1044, maxWidth: 590, fontSize: 25, minFontSize: 17, weight: 500, family: '"Poster Sans", sans-serif', boxHeight: 32, fill: '#18336e', shadowColor: 'transparent', shadowBlur: 0, shadowOffsetY: 0 });
   drawPosterText(context, entry.item?.name || '', { x: 561, y: 1090, maxWidth: 620, fontSize: 29, minFontSize: 18, weight: 800, family: '"Poster Sans", sans-serif', maxLines: 2, lineHeight: 1.02, boxHeight: 54, fill: '#102662', shadowColor: 'rgba(255, 255, 255, 0.55)', shadowBlur: 2, shadowOffsetY: 1 });
-  const resultGradient = context.createLinearGradient(0, 1104, 0, 1148);
-  resultGradient.addColorStop(0, '#512000');
-  resultGradient.addColorStop(0.45, '#c97800');
-  resultGradient.addColorStop(0.62, '#f0b52f');
-  resultGradient.addColorStop(1, '#672800');
-  drawPosterText(context, resultLine, { x: 561, y: 1138, maxWidth: 620, fontSize: 36, minFontSize: 21, weight: 900, family: '"Poster Display", serif', boxHeight: 44, fill: resultGradient, stroke: '#351500', strokeWidth: 1.8, shadowColor: 'rgba(255, 213, 105, 0.8)', shadowBlur: 5, shadowOffsetY: 1 });
+  drawPosterResultBadges(context, resultLabels, { x: 561, y: 1136, maxWidth: 620 });
 
   drawPosterText(context, settings.schoolName, { x: 561, y: 1274, maxWidth: 790, fontSize: 30, minFontSize: 18, family: '"Poster Display", serif', boxHeight: 42, fill: '#14265e', shadowColor: 'transparent', shadowBlur: 0, shadowOffsetY: 0 });
   return canvas;
