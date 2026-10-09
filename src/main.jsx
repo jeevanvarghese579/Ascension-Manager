@@ -319,10 +319,10 @@ function App() {
   });
   const [posterSettings, setPosterSettings] = useState({
     baseImage: '',
-    topLine1: 'മലപ്പുറം ഉപജില്ല',
-    topLine2: 'സ്കൂൾ ശാസ്ത്രോത്സവം',
-    headline: 'അഭിനന്ദനങ്ങൾ',
-    subtitle: 'ഹൃദയം നിറഞ്ഞ ആശംസകൾ',
+    topLine1: 'MALAPPURAM SUB DISTRICT',
+    topLine2: 'SCHOOL SCIENCE FAIR',
+    headline: 'CONGRATULATIONS',
+    subtitle: 'WITH HEARTFELT WISHES',
     schoolName: "ST. GEMMA'S GIRLS' HSS MALAPPURAM"
   });
 
@@ -1062,6 +1062,11 @@ function App() {
     }
   };
 
+  useEffect(() => {
+    if (!authChecked || accessBusy || mode || onlineAccess !== 'authorized' || !currentUser) return;
+    enterCloudMode(currentUser);
+  }, [authChecked, accessBusy, mode, onlineAccess, currentUser]);
+
   const downloadCanvasBlob = (blob, filename) => {
     if (!blob) return;
     const link = document.createElement('a');
@@ -1712,6 +1717,7 @@ function ParticipationPage({ rows, db, studentsById, itemsById, query, setQuery,
           ][column];
         }}
         allowPageSize
+        defaultPageSize={50}
         render={(row) => {
         if (row.kind === 'single') return renderParticipationRow(row.participation);
         const open = Boolean(openGroups[row.item.id]);
@@ -2697,11 +2703,11 @@ function sortRows(rows, sortIndex, sortDirection, sortValue) {
     .map(({ row }) => row);
 }
 
-function PagedTable({ rows, columns, render, sortValue = (row) => JSON.stringify(row), allowPageSize = false }) {
+function PagedTable({ rows, columns, render, sortValue = (row) => JSON.stringify(row), allowPageSize = false, defaultPageSize = 8 }) {
   const [page, setPage] = useState(1);
   const [sortIndex, setSortIndex] = useState(0);
   const [sortDirection, setSortDirection] = useState(1);
-  const [pageSize, setPageSize] = useState(8);
+  const [pageSize, setPageSize] = useState(defaultPageSize);
   const sorted = sortRows(rows, sortIndex, sortDirection, sortValue);
   const total = Math.max(1, Math.ceil(sorted.length / pageSize));
   const currentPage = Math.min(page, total);
@@ -3054,8 +3060,11 @@ function drawPosterText(context, text, options) {
     maxWidth,
     fontSize,
     minFontSize = 18,
-    family = '"Poster Malayalam", "Nirmala UI", sans-serif',
+    family = '"Poster Sans", "Poster Malayalam", sans-serif',
     weight = 800,
+    maxLines = 1,
+    lineHeight = 1.08,
+    boxHeight = fontSize * maxLines * lineHeight,
     fill = '#ffffff',
     stroke = '',
     strokeWidth = 0,
@@ -3065,25 +3074,57 @@ function drawPosterText(context, text, options) {
   } = options;
   const value = String(text).trim();
   let size = fontSize;
+  let lines = [value];
   context.save();
   context.textAlign = 'center';
   context.textBaseline = 'middle';
+  context.fontKerning = 'normal';
   do {
     context.font = `${weight} ${size}px ${family}`;
-    if (context.measureText(value).width <= maxWidth || size <= minFontSize) break;
+    if (maxLines === 1) {
+      lines = context.measureText(value).width <= maxWidth ? [value] : null;
+    } else {
+      const words = value.split(/\s+/);
+      const fitted = [];
+      let current = '';
+      let valid = true;
+      words.forEach((word) => {
+        if (!valid) return;
+        const candidate = current ? `${current} ${word}` : word;
+        if (context.measureText(candidate).width <= maxWidth) {
+          current = candidate;
+        } else if (!current || context.measureText(word).width > maxWidth) {
+          valid = false;
+        } else {
+          fitted.push(current);
+          current = word;
+        }
+      });
+      if (current) fitted.push(current);
+      lines = valid && fitted.length <= maxLines ? fitted : null;
+    }
+    if (lines && lines.length * size * lineHeight <= boxHeight) break;
     size -= 2;
-  } while (size > minFontSize);
+  } while (size >= minFontSize);
+  if (!lines) {
+    size = minFontSize;
+    context.font = `${weight} ${size}px ${family}`;
+    lines = [value];
+  }
   context.shadowColor = shadowColor;
   context.shadowBlur = shadowBlur;
   context.shadowOffsetY = shadowOffsetY;
-  if (stroke && strokeWidth) {
-    context.lineJoin = 'round';
-    context.lineWidth = strokeWidth;
-    context.strokeStyle = stroke;
-    context.strokeText(value, x, y, maxWidth);
-  }
+  context.lineJoin = 'round';
+  context.lineWidth = strokeWidth;
+  context.strokeStyle = stroke;
   context.fillStyle = fill;
-  context.fillText(value, x, y, maxWidth);
+  const lineHeightPixels = size * lineHeight;
+  const firstLineY = y - ((lines.length - 1) * lineHeightPixels) / 2;
+  lines.forEach((line, index) => {
+    const lineY = firstLineY + index * lineHeightPixels;
+    if (stroke && strokeWidth) context.strokeText(line, x, lineY, maxWidth);
+    context.fillText(line, x, lineY, maxWidth);
+  });
   context.restore();
 }
 
@@ -3091,7 +3132,8 @@ async function renderStudentPoster(entry, settings) {
   if (document.fonts) {
     await Promise.all([
       document.fonts.load('900 88px "Poster Malayalam"'),
-      document.fonts.load('900 76px "Poster Slab"')
+      document.fonts.load('900 76px "Poster Display"'),
+      document.fonts.load('800 48px "Poster Sans"')
     ]);
     await document.fonts.ready;
   }
@@ -3117,21 +3159,21 @@ async function renderStudentPoster(entry, settings) {
   context.restore();
   context.drawImage(overlay, 0, 0, POSTER_WIDTH, POSTER_HEIGHT);
 
-  drawPosterText(context, settings.topLine1, { x: 561, y: 50, maxWidth: 335, fontSize: 34 });
-  drawPosterText(context, settings.topLine2, { x: 561, y: 116, maxWidth: 760, fontSize: 29 });
-  drawPosterText(context, settings.headline, { x: 561, y: 163, maxWidth: 810, fontSize: 42, fill: '#ffd86a', stroke: '#673600', strokeWidth: 4, shadowBlur: 5 });
-  drawPosterText(context, settings.subtitle, { x: 561, y: 207, maxWidth: 700, fontSize: 19, fill: '#ffffff', stroke: '#123b86', strokeWidth: 2 });
-  drawPosterText(context, String(entry.student.name || '').toUpperCase(), { x: 561, y: 893, maxWidth: 590, fontSize: 43, family: '"Poster Slab", Georgia, serif', fill: '#ffe7a0', stroke: '#5a3300', strokeWidth: 3 });
+  drawPosterText(context, settings.topLine1, { x: 561, y: 50, maxWidth: 330, fontSize: 24, minFontSize: 14, family: '"Poster Sans", sans-serif', boxHeight: 34 });
+  drawPosterText(context, settings.topLine2, { x: 561, y: 116, maxWidth: 750, fontSize: 27, minFontSize: 18, family: '"Poster Display", "Poster Malayalam", serif', boxHeight: 38 });
+  drawPosterText(context, settings.headline, { x: 561, y: 163, maxWidth: 810, fontSize: 40, minFontSize: 24, family: '"Poster Display", "Poster Malayalam", serif', fill: '#ffd86a', stroke: '#673600', strokeWidth: 4, shadowBlur: 5, boxHeight: 50 });
+  drawPosterText(context, settings.subtitle, { x: 561, y: 207, maxWidth: 680, fontSize: 18, minFontSize: 13, family: '"Poster Sans", "Poster Malayalam", sans-serif', maxLines: 2, boxHeight: 34, fill: '#ffffff', stroke: '#123b86', strokeWidth: 2 });
+  drawPosterText(context, String(entry.student.name || '').toUpperCase(), { x: 561, y: 893, maxWidth: 590, fontSize: 40, minFontSize: 23, family: '"Poster Display", serif', boxHeight: 54, fill: '#ffe7a0', stroke: '#5a3300', strokeWidth: 3 });
 
   const resultLine = [
     hasPosition ? `${formatOrdinal(entry.result.position)} Prize` : '',
     hasGrade ? formatGrade(entry.result.grade) : ''
   ].filter(Boolean).join('  •  ');
-  drawPosterText(context, classDivision(entry.student), { x: 561, y: 1038, maxWidth: 590, fontSize: 30, family: '"Poster Slab", Georgia, serif', fill: '#102662', shadowColor: 'transparent', shadowBlur: 0, shadowOffsetY: 0 });
-  drawPosterText(context, entry.item?.name || '', { x: 561, y: 1082, maxWidth: 620, fontSize: 28, weight: 700, family: '"Poster Slab", Georgia, serif', fill: '#102662', shadowColor: 'transparent', shadowBlur: 0, shadowOffsetY: 0 });
-  drawPosterText(context, resultLine, { x: 561, y: 1121, maxWidth: 620, fontSize: 32, minFontSize: 21, family: '"Poster Slab", Georgia, serif', fill: '#9a5900', stroke: '#fff3c2', strokeWidth: 1.5, shadowColor: 'transparent', shadowBlur: 0, shadowOffsetY: 0 });
+  drawPosterText(context, classDivision(entry.student), { x: 561, y: 1034, maxWidth: 590, fontSize: 27, minFontSize: 18, family: '"Poster Sans", sans-serif', boxHeight: 34, fill: '#102662', shadowColor: 'transparent', shadowBlur: 0, shadowOffsetY: 0 });
+  drawPosterText(context, entry.item?.name || '', { x: 561, y: 1078, maxWidth: 620, fontSize: 25, minFontSize: 16, weight: 700, family: '"Poster Sans", sans-serif', maxLines: 2, boxHeight: 46, fill: '#102662', shadowColor: 'transparent', shadowBlur: 0, shadowOffsetY: 0 });
+  drawPosterText(context, resultLine, { x: 561, y: 1124, maxWidth: 620, fontSize: 26, minFontSize: 17, family: '"Poster Sans", sans-serif', boxHeight: 34, fill: '#9a5900', stroke: '#fff3c2', strokeWidth: 1.5, shadowColor: 'transparent', shadowBlur: 0, shadowOffsetY: 0 });
 
-  drawPosterText(context, settings.schoolName, { x: 561, y: 1296, maxWidth: 790, fontSize: 35, minFontSize: 21, family: '"Poster Slab", Georgia, serif', fill: '#14265e', shadowColor: 'transparent', shadowBlur: 0, shadowOffsetY: 0 });
+  drawPosterText(context, settings.schoolName, { x: 561, y: 1296, maxWidth: 790, fontSize: 30, minFontSize: 18, family: '"Poster Display", serif', boxHeight: 42, fill: '#14265e', shadowColor: 'transparent', shadowBlur: 0, shadowOffsetY: 0 });
   return canvas;
 }
 
