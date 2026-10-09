@@ -3309,11 +3309,11 @@ async function renderStudentPoster(entry, settings) {
   context.fillStyle = '#ffffff';
   context.fillRect(280, 312, 560, 500);
   context.save();
-  context.filter = 'blur(18px) saturate(0.82)';
-  context.globalAlpha = 0.48;
-  drawImageCover(context, studentPhoto, 250, 282, 620, 560);
+  context.filter = 'blur(3px) saturate(0.96)';
+  context.globalAlpha = 0.94;
+  context.drawImage(studentPhoto, 270, 302, 580, 520);
   context.restore();
-  context.fillStyle = 'rgba(255, 255, 255, 0.12)';
+  context.fillStyle = 'rgba(255, 255, 255, 0.04)';
   context.fillRect(280, 312, 560, 500);
   drawImageContain(context, studentPhoto, 280, 312, 560, 500);
   context.restore();
