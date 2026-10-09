@@ -3308,6 +3308,13 @@ async function renderStudentPoster(entry, settings) {
   context.clip();
   context.fillStyle = '#ffffff';
   context.fillRect(280, 312, 560, 500);
+  context.save();
+  context.filter = 'blur(18px) saturate(0.82)';
+  context.globalAlpha = 0.48;
+  drawImageCover(context, studentPhoto, 250, 282, 620, 560);
+  context.restore();
+  context.fillStyle = 'rgba(255, 255, 255, 0.12)';
+  context.fillRect(280, 312, 560, 500);
   drawImageContain(context, studentPhoto, 280, 312, 560, 500);
   context.restore();
   context.drawImage(overlay, 0, 0, POSTER_WIDTH, POSTER_HEIGHT);
@@ -3316,7 +3323,7 @@ async function renderStudentPoster(entry, settings) {
   drawPosterText(context, settings.topLine2, { x: 561, y: 120, maxWidth: 750, fontSize: 27, minFontSize: 18, family: '"Poster Display", "Poster Malayalam", serif', boxHeight: 36 });
   drawPosterText(context, settings.headline, { x: 561, y: 162, maxWidth: 810, fontSize: 40, minFontSize: 24, family: '"Poster Display", "Poster Malayalam", serif', fill: '#ffd86a', stroke: '#673600', strokeWidth: 4, shadowBlur: 5, boxHeight: 48 });
   drawPosterText(context, settings.subtitle, { x: 561, y: 200, maxWidth: 680, fontSize: 18, minFontSize: 13, family: '"Poster Sans", "Poster Malayalam", sans-serif', maxLines: 2, lineHeight: 1, boxHeight: 30, fill: '#ffffff', stroke: '#123b86', strokeWidth: 2 });
-  drawPosterCurvedText(context, String(entry.student.name || '').toUpperCase(), { x: 561, y: 858, maxWidth: 590, fontSize: 40, minFontSize: 23, curveDepth: 8 });
+  drawPosterCurvedText(context, String(entry.student.name || '').toUpperCase(), { x: 561, y: 858, maxWidth: 590, fontSize: 40, minFontSize: 23, curveDepth: 18 });
 
   const resultLabels = [
     hasPosition ? `${formatOrdinal(entry.result.position)} Prize` : '',
