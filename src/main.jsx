@@ -1771,6 +1771,7 @@ function GracePage({ notifications }) {
 function CollagePage(props) {
   const [selectedKeys, setSelectedKeys] = useState([]);
   const keyFor = (entry) => `${entry.student.id}|${entry.item?.id || 'student'}|${entry.level}`;
+  const entryLabel = (entry) => `${entry.student.name} · ${entry.item?.name || 'Student'}`;
   const selectedEntries = keepGroupEntriesTogether(
     selectedKeys.map((key) => props.entries.find((entry) => keyFor(entry) === key)).filter(Boolean)
   );
@@ -1799,7 +1800,7 @@ function CollagePage(props) {
   return (
     <section className="collage-page">
       <div className="collage-page-head">
-        <div><strong>{props.entries.length} matching students · {selectedEntries.length} selected</strong></div>
+        <div><strong>{props.entries.length} matching entries · {selectedEntries.length} selected</strong></div>
         <div className="collage-export-actions">
           <button className="primary" disabled={!selectedEntries.length} onClick={() => props.downloadCollageImage('jpeg')}><Download size={16} /> Export JPEG</button>
           <button disabled={!selectedEntries.length} onClick={() => props.downloadCollageImage('png')}><FileImage size={16} /> PNG</button>
@@ -1812,12 +1813,12 @@ function CollagePage(props) {
           <CollageControls {...props} selectedKeys={selectedKeys} setSelectedKeys={setSelectedKeys} keyFor={keyFor} sortSelected={sortSelected} randomize={randomize} />
           {selectedEntries.length > 0 && (
             <section className="collage-selection-strip">
-              <strong>Selected Students ({selectedEntries.length})</strong>
-              <div>{selectedEntries.map((entry) => <button key={keyFor(entry)} onClick={() => toggle(entry)}>{entry.student.name}<X size={13} /></button>)}</div>
+              <strong>Selected Entries ({selectedEntries.length})</strong>
+              <div>{selectedEntries.map((entry) => <button key={keyFor(entry)} onClick={() => toggle(entry)}>{entryLabel(entry)}<X size={13} /></button>)}</div>
             </section>
           )}
           <section className="collage-picker-panel">
-            <strong>Filtered Students ({props.entries.length})</strong>
+            <strong>Filtered Entries ({props.entries.length})</strong>
             <div className="collage-picker-grid">
               {props.entries.map((entry) => {
                 const selected = selectedKeys.includes(keyFor(entry));
@@ -1841,6 +1842,7 @@ function SinglePosterPage({ db, levels, entries, posterFilter, setPosterFilter, 
   const [status, setStatus] = useState('');
   const canvasRef = useRef(null);
   const keyFor = (entry) => `${entry.student.id}|${entry.item?.id || 'student'}|${entry.level}`;
+  const entryLabel = (entry) => `${entry.student.name} · ${entry.item?.name || 'Student'}`;
   const selectedEntries = keepGroupEntriesTogether(
     selectedKeys.map((key) => entries.find((entry) => keyFor(entry) === key)).filter(Boolean)
   );
@@ -1905,7 +1907,7 @@ function SinglePosterPage({ db, levels, entries, posterFilter, setPosterFilter, 
     try {
       const canvas = await renderStudentPoster(previewEntry, settings);
       const blob = await canvasToBlob(canvas, 'image/png');
-      downloadGeneratedBlob(blob, `${safeFilename(previewEntry.student.name)}-poster.png`);
+      downloadGeneratedBlob(blob, `${safeFilename(previewEntry.student.name)}-${safeFilename(previewEntry.item?.name || 'student')}-poster.png`);
       setStatus('Poster downloaded.');
     } catch (error) {
       console.error('Could not export the student poster.', error);
@@ -1924,7 +1926,7 @@ function SinglePosterPage({ db, levels, entries, posterFilter, setPosterFilter, 
         const entry = selectedEntries[index];
         setStatus(`Creating ${index + 1} of ${selectedEntries.length} posters…`);
         const canvas = await renderStudentPoster(entry, settings);
-        zip.file(`${String(index + 1).padStart(2, '0')}-${safeFilename(entry.student.name)}-poster.png`, await canvasToBlob(canvas, 'image/png'));
+        zip.file(`${String(index + 1).padStart(2, '0')}-${safeFilename(entry.student.name)}-${safeFilename(entry.item?.name || 'student')}-poster.png`, await canvasToBlob(canvas, 'image/png'));
       }
       downloadGeneratedBlob(await zip.generateAsync({ type: 'blob' }), 'student-posters.zip');
       setStatus(`${selectedEntries.length} posters downloaded as a ZIP file.`);
@@ -1939,7 +1941,7 @@ function SinglePosterPage({ db, levels, entries, posterFilter, setPosterFilter, 
   return (
     <section className="poster-page">
       <div className="collage-page-head">
-        <div><strong>{entries.length} matching students · {selectedEntries.length} selected</strong></div>
+        <div><strong>{entries.length} matching posters · {selectedEntries.length} selected</strong></div>
         <div className="collage-export-actions">
           <button disabled={!previewEntry || exporting} onClick={exportCurrent}><Download size={16} /> Download current</button>
           <button className="primary" disabled={!selectedEntries.length || exporting} onClick={exportBatch}><Images size={16} /> {exporting ? 'Preparing…' : 'Batch download'}</button>
@@ -1963,16 +1965,16 @@ function SinglePosterPage({ db, levels, entries, posterFilter, setPosterFilter, 
         <div className="poster-student-column">
           {selectedEntries.length > 0 && (
             <section className="collage-selection-strip">
-              <strong>Selected Students ({selectedEntries.length})</strong>
+              <strong>Selected Posters ({selectedEntries.length})</strong>
               <div>{selectedEntries.map((entry) => (
                 <button className={keyFor(entry) === keyFor(previewEntry) ? 'active' : ''} key={keyFor(entry)} onClick={() => setPreviewKey(keyFor(entry))}>
-                  {entry.student.name}
+                  {entryLabel(entry)}
                 </button>
               ))}</div>
             </section>
           )}
           <section className="collage-picker-panel">
-            <strong>Filtered Students ({entries.length})</strong>
+            <strong>Available Posters ({entries.length})</strong>
             <div className="collage-picker-grid">
               {entries.map((entry) => {
                 const selected = selectedKeys.includes(keyFor(entry));
@@ -2001,7 +2003,7 @@ function SinglePosterPage({ db, levels, entries, posterFilter, setPosterFilter, 
             <div><strong>Poster Preview</strong>{previewEntry && <span>{previewEntry.student.name} · {previewEntry.item?.name || 'No item'}</span>}</div>
             {selectedEntries.length > 1 && (
               <select value={previewEntry ? keyFor(previewEntry) : ''} onChange={(event) => setPreviewKey(event.target.value)}>
-                {selectedEntries.map((entry) => <option key={keyFor(entry)} value={keyFor(entry)}>{entry.student.name}</option>)}
+                {selectedEntries.map((entry) => <option key={keyFor(entry)} value={keyFor(entry)}>{entryLabel(entry)}</option>)}
               </select>
             )}
           </div>
@@ -2895,12 +2897,6 @@ function buildGeneratorEntries(db, studentsById, itemsById, filter, configuredLe
   const levelFilter = filter.level;
   const rows = [];
   const includedStudents = new Set();
-  const groupIdsByStudent = new Map();
-  db.groupMembers.forEach((member) => {
-    if (String(itemsById[member.itemId]?.type || '').toLowerCase() !== 'group') return;
-    if (!groupIdsByStudent.has(member.studentId)) groupIdsByStudent.set(member.studentId, []);
-    groupIdsByStudent.get(member.studentId).push(member.itemId);
-  });
   db.participations.forEach((participation) => {
     const student = studentsById[participation.studentId];
     const item = itemsById[participation.itemId];
@@ -2920,7 +2916,13 @@ function buildGeneratorEntries(db, studentsById, itemsById, filter, configuredLe
       if (filter.position !== 'All' && String(result.position || '') !== filter.position) return;
       if (filter.grade !== 'All' && String(result.grade || '') !== filter.grade) return;
       includedStudents.add(student.id);
-      rows.push({ student, item, level, result, groupIds: groupIdsByStudent.get(student.id) || [] });
+      rows.push({
+        student,
+        item,
+        level,
+        result,
+        groupIds: String(item.type || '').toLowerCase() === 'group' ? [item.id] : []
+      });
     });
   });
   db.students.forEach((student) => {
@@ -2932,13 +2934,14 @@ function buildGeneratorEntries(db, studentsById, itemsById, filter, configuredLe
     if (filter.gender !== 'All' && student.gender !== filter.gender) return;
     if (filter.search && !`${student.name} ${student.className} ${student.admissionNo}`.toLowerCase().includes(filter.search.toLowerCase())) return;
     if (levelFilter !== 'Entire list' && levelFilter !== '') return;
-    rows.push({ student, item: null, level: '', result: {}, groupIds: groupIdsByStudent.get(student.id) || [] });
+    rows.push({ student, item: null, level: '', result: {}, groupIds: [] });
   });
   const ordered = rows.sort((a, b) => compareResult(a.result, b.result) || a.student.name.localeCompare(b.student.name));
-  const seenStudents = new Set();
+  const seenParticipations = new Set();
   return ordered.filter((entry) => {
-    if (seenStudents.has(entry.student.id)) return false;
-    seenStudents.add(entry.student.id);
+    const participationKey = `${entry.student.id}|${entry.item?.id || 'student'}`;
+    if (seenParticipations.has(participationKey)) return false;
+    seenParticipations.add(participationKey);
     return true;
   });
 }
