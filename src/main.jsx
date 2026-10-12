@@ -1665,7 +1665,7 @@ function ParticipationPage({ rows, db, studentsById, itemsById, query, setQuery,
     const result = p.results?.[p.currentLevel] || {};
     return (
       <tr key={p.id} className={memberClass}>
-        <td><Person student={s} /></td>
+        <td><Person student={s} onNameClick={() => setModal({ type: 'student', student: s })} /></td>
         <td>{i?.name}</td>
         <td>{i?.category}</td>
         <td>
@@ -2778,9 +2778,19 @@ function FormGrid({ children }) {
   return <div className="form-grid">{children}</div>;
 }
 
-function Person({ student, small }) {
+function Person({ student, small, onNameClick }) {
   if (!student) return null;
-  return <div className={`person ${small ? 'small' : ''}`}><img src={student.photo || blankPhoto} alt="" /><span><strong>{student.name}</strong><em>{classDivision(student)}</em></span></div>;
+  return (
+    <div className={`person ${small ? 'small' : ''}`}>
+      <img src={student.photo || blankPhoto} alt="" />
+      <span>
+        {onNameClick ? (
+          <button className="person-name-button" type="button" title={`Edit ${student.name}`} onClick={onNameClick}>{student.name}</button>
+        ) : <strong>{student.name}</strong>}
+        <em>{classDivision(student)}</em>
+      </span>
+    </div>
+  );
 }
 
 function SearchBox({ query, setQuery, placeholder }) {
