@@ -1080,6 +1080,15 @@ th {
   grid-column: 1 / -1;
 }
 
+.participation-picker-select[size]:not([size="1"]) {
+  min-height: 112px;
+  padding: 4px;
+}
+
+.participation-picker-select[size]:not([size="1"]) option {
+  padding: 7px 8px;
+}
+
 .inline-add-button {
   display: inline-flex;
   align-items: center;

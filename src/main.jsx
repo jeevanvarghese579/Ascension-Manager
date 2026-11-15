@@ -2318,9 +2318,18 @@ function ParticipationModal({ data, db, save, close, levels }) {
             autoComplete="off"
             disabled={addingStudent}
           />
-          <select value={form.studentId} onChange={(e) => setForm({ ...form, studentId: e.target.value })} disabled={addingStudent}>
+          <select
+            className="participation-picker-select"
+            value={form.studentId}
+            size={studentSearch.trim() ? Math.min(Math.max(filteredStudents.length + 1, 2), 6) : 1}
+            onChange={(e) => {
+              setForm({ ...form, studentId: e.target.value });
+              setStudentSearch('');
+            }}
+            disabled={addingStudent}
+          >
             <option value="">Choose student</option>
-            {filteredStudents.map((s) => <option key={s.id} value={s.id}>{s.name} ({s.admissionNo})</option>)}
+            {filteredStudents.map((s) => <option key={s.id} value={s.id}>{s.name} ({classDivision(s)})</option>)}
             {!filteredStudents.length && <option disabled>No matching students</option>}
           </select>
           {!data && <button className="inline-add-button" onClick={() => setAddingStudent(!addingStudent)}><Plus size={16} />{addingStudent ? 'Use existing student' : 'Add participant'}</button>}
@@ -2337,9 +2346,18 @@ function ParticipationModal({ data, db, save, close, levels }) {
             autoComplete="off"
             disabled={addingItem}
           />
-          <select value={form.itemId} onChange={(e) => setForm({ ...form, itemId: e.target.value })} disabled={addingItem}>
+          <select
+            className="participation-picker-select"
+            value={form.itemId}
+            size={itemSearch.trim() ? Math.min(Math.max(filteredItems.length + 1, 2), 6) : 1}
+            onChange={(e) => {
+              setForm({ ...form, itemId: e.target.value });
+              setItemSearch('');
+            }}
+            disabled={addingItem}
+          >
             <option value="">Choose item</option>
-            {filteredItems.map((i) => <option key={i.id} value={i.id}>{i.name} - {i.type}</option>)}
+            {filteredItems.map((i) => <option key={i.id} value={i.id}>{i.name} ({i.category})</option>)}
             {!filteredItems.length && <option disabled>No matching items</option>}
           </select>
           {!data && <button className="inline-add-button" onClick={() => setAddingItem(!addingItem)}><Plus size={16} />{addingItem ? 'Use existing item' : 'Add item'}</button>}
