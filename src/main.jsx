@@ -2237,13 +2237,31 @@ function ItemModal({ data, db, save, close, addCategory, levels }) {
 }
 
 function ParticipationModal({ data, db, save, close, levels }) {
-  const [form, setForm] = useState(data || { studentId: db.students[0]?.id || '', itemId: db.items[0]?.id || '', currentLevel: 'School Level', nextCompetitionDate: '', ended: false, results: {} });
+  const [form, setForm] = useState(data || { studentId: '', itemId: '', currentLevel: 'School Level', nextCompetitionDate: '', ended: false, results: {} });
+  const [studentSearch, setStudentSearch] = useState('');
+  const [itemSearch, setItemSearch] = useState('');
   const [addingStudent, setAddingStudent] = useState(false);
   const [addingItem, setAddingItem] = useState(false);
   const [newStudent, setNewStudent] = useState({ name: '', admissionNo: '', className: '', division: '', gender: '', schoolName: 'St. Gemmas GHSS Malappuram', contact: '', photo: blankPhoto });
   const [newItem, setNewItem] = useState({ name: '', category: db.categories[0] || 'Arts', type: 'Individual', level: form.currentLevel || 'School Level' });
   const initialResult = form.results?.[normalizeLevel(form.currentLevel)] || { position: '', grade: '', graceMarks: 0, remarks: '', date: today() };
   const [result, setResult] = useState(initialResult);
+  const filteredStudents = useMemo(() => {
+    const search = studentSearch.trim().toLowerCase();
+    if (!search) return db.students;
+    return db.students.filter((student) => (
+      student.id === form.studentId
+      || `${student.name} ${student.admissionNo} ${student.className} ${student.division}`.toLowerCase().includes(search)
+    ));
+  }, [db.students, form.studentId, studentSearch]);
+  const filteredItems = useMemo(() => {
+    const search = itemSearch.trim().toLowerCase();
+    if (!search) return db.items;
+    return db.items.filter((item) => (
+      item.id === form.itemId
+      || `${item.name} ${item.category} ${item.type}`.toLowerCase().includes(search)
+    ));
+  }, [db.items, form.itemId, itemSearch]);
   const submit = () => {
     if (addingStudent && !newStudent.name.trim()) return;
     if (addingItem && !newItem.name.trim()) return;
@@ -2290,17 +2308,39 @@ function ParticipationModal({ data, db, save, close, levels }) {
       <FormGrid>
         <div className="participation-picker">
           <label>Participant</label>
+          <input
+            className="participation-picker-search"
+            type="search"
+            value={studentSearch}
+            onChange={(e) => setStudentSearch(e.target.value)}
+            placeholder="Search students by name, ID or class"
+            aria-label="Search students"
+            autoComplete="off"
+            disabled={addingStudent}
+          />
           <select value={form.studentId} onChange={(e) => setForm({ ...form, studentId: e.target.value })} disabled={addingStudent}>
             <option value="">Choose student</option>
-            {db.students.map((s) => <option key={s.id} value={s.id}>{s.name} ({s.admissionNo})</option>)}
+            {filteredStudents.map((s) => <option key={s.id} value={s.id}>{s.name} ({s.admissionNo})</option>)}
+            {!filteredStudents.length && <option disabled>No matching students</option>}
           </select>
           {!data && <button className="inline-add-button" onClick={() => setAddingStudent(!addingStudent)}><Plus size={16} />{addingStudent ? 'Use existing student' : 'Add participant'}</button>}
         </div>
         <div className="participation-picker">
           <label>Competition item</label>
+          <input
+            className="participation-picker-search"
+            type="search"
+            value={itemSearch}
+            onChange={(e) => setItemSearch(e.target.value)}
+            placeholder="Search items by name, category or type"
+            aria-label="Search items"
+            autoComplete="off"
+            disabled={addingItem}
+          />
           <select value={form.itemId} onChange={(e) => setForm({ ...form, itemId: e.target.value })} disabled={addingItem}>
             <option value="">Choose item</option>
-            {db.items.map((i) => <option key={i.id} value={i.id}>{i.name} - {i.type}</option>)}
+            {filteredItems.map((i) => <option key={i.id} value={i.id}>{i.name} - {i.type}</option>)}
+            {!filteredItems.length && <option disabled>No matching items</option>}
           </select>
           {!data && <button className="inline-add-button" onClick={() => setAddingItem(!addingItem)}><Plus size={16} />{addingItem ? 'Use existing item' : 'Add item'}</button>}
         </div>
